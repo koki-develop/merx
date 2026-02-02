@@ -5,8 +5,8 @@ use crate::ast::{Edge, EdgeLabel, Flowchart, Node};
 
 use super::env::Environment;
 use super::error::RuntimeError;
-use super::eval::{eval_expr, InputReader, StdinReader};
-use super::exec::{exec_statement, OutputWriter, StdioWriter};
+use super::eval::{InputReader, StdinReader, eval_expr};
+use super::exec::{OutputWriter, StdioWriter, exec_statement};
 
 /// The interpreter.
 pub struct Interpreter<R: InputReader, W: OutputWriter> {

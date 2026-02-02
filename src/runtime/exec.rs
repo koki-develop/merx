@@ -2,7 +2,7 @@ use crate::ast::Statement;
 
 use super::env::Environment;
 use super::error::RuntimeError;
-use super::eval::{eval_expr, InputReader};
+use super::eval::{InputReader, eval_expr};
 
 /// Trait for writing output (for testability).
 pub trait OutputWriter {
@@ -128,10 +128,7 @@ mod tests {
 
         exec_statement(&stmt, &mut env, &mut input, &mut output).unwrap();
 
-        assert_eq!(
-            env.get("x").unwrap(),
-            &super::super::value::Value::Int(42)
-        );
+        assert_eq!(env.get("x").unwrap(), &super::super::value::Value::Int(42));
         assert!(output.stdout.is_empty());
         assert!(output.stderr.is_empty());
     }

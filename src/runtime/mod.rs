@@ -7,7 +7,7 @@ mod value;
 
 pub use env::Environment;
 pub use error::RuntimeError;
-pub use eval::{eval_expr, InputReader, StdinReader};
-pub use exec::{exec_statement, OutputWriter, StdioWriter};
+pub use eval::{InputReader, StdinReader, eval_expr};
+pub use exec::{OutputWriter, StdioWriter, exec_statement};
 pub use interpreter::Interpreter;
 pub use value::Value;

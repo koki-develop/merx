@@ -2,8 +2,8 @@ mod error;
 
 use std::collections::HashMap;
 
-use pest::iterators::Pair;
 use pest::Parser;
+use pest::iterators::Pair;
 use pest_derive::Parser;
 
 pub use error::ParseError;
@@ -134,7 +134,16 @@ fn parse_direction(pair: Pair<Rule>) -> Direction {
 
 fn parse_line(
     pair: Pair<Rule>,
-) -> Result<(String, String, Option<EdgeLabel>, Option<Node>, Option<Node>), ParseError> {
+) -> Result<
+    (
+        String,
+        String,
+        Option<EdgeLabel>,
+        Option<Node>,
+        Option<Node>,
+    ),
+    ParseError,
+> {
     let edge_def = pair.into_inner().next().unwrap();
     let mut inner = edge_def.into_inner();
 

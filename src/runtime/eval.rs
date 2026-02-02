@@ -33,9 +33,11 @@ impl Default for StdinReader<io::BufReader<io::Stdin>> {
 impl<R: BufRead> InputReader for StdinReader<R> {
     fn read_line(&mut self) -> Result<String, RuntimeError> {
         let mut buf = String::new();
-        self.reader.read_line(&mut buf).map_err(|e| RuntimeError::IoError {
-            message: e.to_string(),
-        })?;
+        self.reader
+            .read_line(&mut buf)
+            .map_err(|e| RuntimeError::IoError {
+                message: e.to_string(),
+            })?;
         // Trim trailing newlines
         Ok(buf.trim_end_matches(['\r', '\n']).to_string())
     }
@@ -188,13 +190,15 @@ fn eval_cast(val: Value, target: TypeName) -> Result<Value, RuntimeError> {
     match target {
         TypeName::Int => match val {
             Value::Int(n) => Ok(Value::Int(n)),
-            Value::Str(ref s) => s.parse::<i64>().map(Value::Int).map_err(|_| {
-                RuntimeError::CastError {
-                    from_type: "str",
-                    to_type: "int",
-                    value: s.clone(),
-                }
-            }),
+            Value::Str(ref s) => {
+                s.parse::<i64>()
+                    .map(Value::Int)
+                    .map_err(|_| RuntimeError::CastError {
+                        from_type: "str",
+                        to_type: "int",
+                        value: s.clone(),
+                    })
+            }
             Value::Bool(_) => Err(RuntimeError::CastError {
                 from_type: "bool",
                 to_type: "int",
