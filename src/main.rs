@@ -5,6 +5,7 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 
 use merx::parser;
+use merx::runtime::Interpreter;
 
 #[derive(Parser)]
 #[command(name = "merx", about = "Mermaid flowchart executor", version)]
@@ -43,13 +44,18 @@ fn main() -> ExitCode {
                 }
             };
 
-            match serde_json::to_string_pretty(&flowchart) {
-                Ok(json) => {
-                    println!("{}", json);
-                    ExitCode::SUCCESS
-                }
+            let mut interpreter = match Interpreter::new(flowchart) {
+                Ok(i) => i,
                 Err(e) => {
-                    eprintln!("JSON serialization error: {}", e);
+                    eprintln!("Runtime error: {}", e);
+                    return ExitCode::from(1);
+                }
+            };
+
+            match interpreter.run() {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("Runtime error: {}", e);
                     ExitCode::from(1)
                 }
             }
