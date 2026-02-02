@@ -90,3 +90,34 @@ All AST types derive `Serialize` for JSON output.
 - `Environment`: HashMap-based variable storage
 - `InputReader` / `OutputWriter` traits for testability (dependency injection)
 
+## Release Workflow
+
+The project uses `release-please` for automated releases. When a release is created, binaries are built for 5 platforms:
+
+| Target | Runner | Notes |
+|--------|--------|-------|
+| `x86_64-unknown-linux-gnu` | ubuntu-latest | Native build |
+| `aarch64-unknown-linux-gnu` | ubuntu-latest | Uses `cross` for cross-compilation |
+| `x86_64-apple-darwin` | macos-15-intel | Intel Mac (Tier 2) |
+| `aarch64-apple-darwin` | macos-latest | Apple Silicon |
+| `x86_64-pc-windows-msvc` | windows-latest | Windows |
+
+Release artifacts:
+- Archives: `.tar.gz` (Unix) / `.zip` (Windows)
+- SHA256 checksums for each archive
+- Includes: binary, LICENSE, README.md
+
+## GitHub Actions Conventions
+
+- Use `github.token` instead of `secrets.GITHUB_TOKEN`
+- Pass template variables via environment variables to prevent template injection:
+  ```yaml
+  env:
+    TARGET: ${{ matrix.target }}
+  steps:
+    - run: echo "$TARGET"  # Safe
+    # - run: echo "${{ matrix.target }}"  # Unsafe
+  ```
+- Pin actions by commit hash (e.g., `actions/checkout@de0fac2e4...`)
+- Use `.github/actions/setup` for Rust toolchain setup (via mise)
+
