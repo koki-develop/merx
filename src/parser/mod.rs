@@ -133,19 +133,19 @@ pub fn parse(input: &str) -> Result<Flowchart, ParseError> {
                         direction = parse_direction(inner);
                     }
                     Rule::line => {
-                        let (from_id, to_id, label, from_node, to_node) = parse_line(inner)?;
+                        let parsed = parse_line(inner)?;
 
-                        if let Some(node) = from_node {
+                        if let Some(node) = parsed.from_node {
                             nodes.entry(node.id().to_string()).or_insert(node);
                         }
-                        if let Some(node) = to_node {
+                        if let Some(node) = parsed.to_node {
                             nodes.entry(node.id().to_string()).or_insert(node);
                         }
 
                         edges.push(Edge {
-                            from: from_id,
-                            to: to_id,
-                            label,
+                            from: parsed.from_id,
+                            to: parsed.to_id,
+                            label: parsed.label,
                         });
                     }
                     _ => {}
@@ -251,6 +251,22 @@ fn parse_direction(pair: Pair<Rule>) -> Direction {
     }
 }
 
+/// Result of parsing a single line (edge definition) in the flowchart.
+///
+/// Contains the edge information and any node definitions found on the line.
+struct ParsedLine {
+    /// The source node identifier.
+    from_id: String,
+    /// The target node identifier.
+    to_id: String,
+    /// Optional edge label (`Yes`, `No`, or custom text).
+    label: Option<EdgeLabel>,
+    /// The source node definition, if present on this line.
+    from_node: Option<Node>,
+    /// The target node definition, if present on this line.
+    to_node: Option<Node>,
+}
+
 /// Parses a single line containing an edge definition.
 ///
 /// A line in the flowchart defines an edge between two nodes, optionally
@@ -263,7 +279,7 @@ fn parse_direction(pair: Pair<Rule>) -> Direction {
 ///
 /// # Returns
 ///
-/// A tuple containing:
+/// A [`ParsedLine`] containing:
 /// - `from_id`: The source node identifier
 /// - `to_id`: The target node identifier
 /// - `label`: Optional edge label (`Yes`, `No`, or custom)
@@ -273,18 +289,7 @@ fn parse_direction(pair: Pair<Rule>) -> Direction {
 /// # Errors
 ///
 /// Returns [`ParseError`] if node parsing fails.
-fn parse_line(
-    pair: Pair<Rule>,
-) -> Result<
-    (
-        String,
-        String,
-        Option<EdgeLabel>,
-        Option<Node>,
-        Option<Node>,
-    ),
-    ParseError,
-> {
+fn parse_line(pair: Pair<Rule>) -> Result<ParsedLine, ParseError> {
     let edge_def = pair.into_inner().next().unwrap();
     let mut inner = edge_def.into_inner();
 
@@ -301,7 +306,13 @@ fn parse_line(
 
     let (to_id, to_node) = parse_node_ref(to_pair)?;
 
-    Ok((from_id, to_id, label, from_node, to_node))
+    Ok(ParsedLine {
+        from_id,
+        to_id,
+        label,
+        from_node,
+        to_node,
+    })
 }
 
 /// Parses an edge label enclosed in `|` delimiters.
