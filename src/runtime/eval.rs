@@ -1050,4 +1050,147 @@ mod tests {
             })
         ));
     }
+
+    #[test]
+    fn test_input_eof_mock_reader() {
+        // MockInputReader returns IoError when no more input is available
+        let env = Environment::new();
+        let mut input = MockInputReader::new(vec![]); // No input available
+        let expr = Expr::Input;
+
+        let result = eval_expr(&expr, &env, &mut input);
+        assert!(matches!(
+            result,
+            Err(RuntimeError::IoError { message }) if message == "No more input"
+        ));
+    }
+
+    #[test]
+    fn test_input_eof_stdin_reader() {
+        // StdinReader returns empty string at EOF (not an error)
+        // This tests the actual StdinReader behavior with an empty buffer
+        use std::io::Cursor;
+
+        let env = Environment::new();
+        let empty_buffer = Cursor::new(Vec::<u8>::new());
+        let mut input = StdinReader {
+            reader: empty_buffer,
+        };
+        let expr = Expr::Input;
+
+        let result = eval_expr(&expr, &env, &mut input).unwrap();
+        // At EOF, read_line returns Ok("") (empty string after trimming)
+        assert_eq!(result, Value::Str("".to_string()));
+    }
+
+    #[test]
+    fn test_input_empty_line() {
+        // Empty line (just newline) should return empty string
+        use std::io::Cursor;
+
+        let env = Environment::new();
+        let buffer = Cursor::new(b"\n".to_vec());
+        let mut input = StdinReader { reader: buffer };
+        let expr = Expr::Input;
+
+        let result = eval_expr(&expr, &env, &mut input).unwrap();
+        assert_eq!(result, Value::Str("".to_string()));
+    }
+
+    #[test]
+    fn test_input_empty_line_crlf() {
+        // Empty line with CRLF should return empty string
+        use std::io::Cursor;
+
+        let env = Environment::new();
+        let buffer = Cursor::new(b"\r\n".to_vec());
+        let mut input = StdinReader { reader: buffer };
+        let expr = Expr::Input;
+
+        let result = eval_expr(&expr, &env, &mut input).unwrap();
+        assert_eq!(result, Value::Str("".to_string()));
+    }
+
+    #[test]
+    fn test_input_whitespace_spaces() {
+        // Line with only spaces should preserve those spaces
+        use std::io::Cursor;
+
+        let env = Environment::new();
+        let buffer = Cursor::new(b"   \n".to_vec());
+        let mut input = StdinReader { reader: buffer };
+        let expr = Expr::Input;
+
+        let result = eval_expr(&expr, &env, &mut input).unwrap();
+        // Only trailing \r and \n are trimmed, spaces are preserved
+        assert_eq!(result, Value::Str("   ".to_string()));
+    }
+
+    #[test]
+    fn test_input_whitespace_tabs() {
+        // Line with only tabs should preserve those tabs
+        use std::io::Cursor;
+
+        let env = Environment::new();
+        let buffer = Cursor::new(b"\t\t\n".to_vec());
+        let mut input = StdinReader { reader: buffer };
+        let expr = Expr::Input;
+
+        let result = eval_expr(&expr, &env, &mut input).unwrap();
+        // Only trailing \r and \n are trimmed, tabs are preserved
+        assert_eq!(result, Value::Str("\t\t".to_string()));
+    }
+
+    #[test]
+    fn test_input_whitespace_mixed() {
+        // Line with mixed whitespace (spaces and tabs) should preserve them
+        use std::io::Cursor;
+
+        let env = Environment::new();
+        let buffer = Cursor::new(b" \t \t \n".to_vec());
+        let mut input = StdinReader { reader: buffer };
+        let expr = Expr::Input;
+
+        let result = eval_expr(&expr, &env, &mut input).unwrap();
+        assert_eq!(result, Value::Str(" \t \t ".to_string()));
+    }
+
+    #[test]
+    fn test_input_multiple_reads() {
+        // Multiple reads should return lines in order
+        use std::io::Cursor;
+
+        let env = Environment::new();
+        let buffer = Cursor::new(b"first\nsecond\nthird\n".to_vec());
+        let mut input = StdinReader { reader: buffer };
+
+        let expr = Expr::Input;
+
+        let result1 = eval_expr(&expr, &env, &mut input).unwrap();
+        assert_eq!(result1, Value::Str("first".to_string()));
+
+        let result2 = eval_expr(&expr, &env, &mut input).unwrap();
+        assert_eq!(result2, Value::Str("second".to_string()));
+
+        let result3 = eval_expr(&expr, &env, &mut input).unwrap();
+        assert_eq!(result3, Value::Str("third".to_string()));
+
+        // Fourth read should return empty string (EOF)
+        let result4 = eval_expr(&expr, &env, &mut input).unwrap();
+        assert_eq!(result4, Value::Str("".to_string()));
+    }
+
+    #[test]
+    fn test_input_no_trailing_newline() {
+        // Line without trailing newline (last line of file)
+        use std::io::Cursor;
+
+        let env = Environment::new();
+        let buffer = Cursor::new(b"no newline at end".to_vec());
+        let mut input = StdinReader { reader: buffer };
+        let expr = Expr::Input;
+
+        let result = eval_expr(&expr, &env, &mut input).unwrap();
+        assert_eq!(result, Value::Str("no newline at end".to_string()));
+    }
 }
