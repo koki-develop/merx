@@ -270,6 +270,30 @@ mod runtime_errors {
     use super::*;
 
     #[test]
+    fn test_missing_start_node_runtime() {
+        // Parser allows missing Start, but runtime should fail
+        let source = include_str!("fixtures/invalid/missing_start.mmd");
+
+        // First verify it parses
+        let flowchart = parser::parse(source).expect("Should parse successfully");
+
+        // Then verify runtime fails
+        let input = MockInputReader::empty();
+        let output = MockOutputWriter::new();
+        let result = Interpreter::with_io(flowchart, input, output);
+
+        assert!(
+            result.is_err(),
+            "Should fail at runtime with missing Start node"
+        );
+        match result {
+            Err(RuntimeError::MissingStartNode) => {}
+            Err(e) => panic!("Should be MissingStartNode error, got: {:?}", e),
+            Ok(_) => panic!("Should have failed"),
+        }
+    }
+
+    #[test]
     fn test_missing_end_node_runtime() {
         // Parser allows missing End, but runtime should fail
         let source = include_str!("fixtures/invalid/missing_end.mmd");
