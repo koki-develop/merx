@@ -30,7 +30,7 @@ jobs:
       - uses: ./.github/actions/setup
       - run: rustup component add rustfmt clippy
       - run: cargo fmt --check
-      - run: cargo clippy -- -D warnings
+      - run: cargo clippy --locked -- -D warnings
 
   test:
     name: Test
@@ -43,7 +43,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-      - run: cargo test
+      - run: cargo test --locked
 
   build:
     name: Build
@@ -56,4 +56,4 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-      - run: cargo build
+      - run: cargo build --locked
