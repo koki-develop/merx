@@ -57,6 +57,12 @@ src/
     ├── eval.rs      # Expression evaluation
     ├── exec.rs      # Statement execution
     └── interpreter.rs # Interpreter main loop
+
+tests/
+├── integration_tests.rs  # Integration tests for the interpreter
+└── fixtures/
+    ├── valid/       # Valid .mmd files for testing successful execution
+    └── invalid/     # Invalid .mmd files for testing error handling
 ```
 
 ### Parser
