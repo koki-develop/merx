@@ -1,0 +1,16 @@
+flowchart TD
+    Start --> A[n = 1]
+    A --> B{n <= 100?}
+    B -->|No| End
+    B -->|Yes| C{n % 15 == 0?}
+    C -->|Yes| D[print 'FizzBuzz']
+    C -->|No| E{n % 3 == 0?}
+    E -->|Yes| F[print 'Fizz']
+    E -->|No| G{n % 5 == 0?}
+    G -->|Yes| H[print 'Buzz']
+    G -->|No| I[print n]
+    D --> J[n = n + 1]
+    F --> J
+    H --> J
+    I --> J
+    J --> B

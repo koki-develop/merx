@@ -1,0 +1,23 @@
+flowchart TD
+    Start --> B[n = input as int]
+    B --> C{n <= 0?}
+    C -->|Yes| D[error '正の整数を入力してください']
+    D --> End
+    C -->|No| E{n == 1?}
+    E -->|Yes| F[print 0]
+    F --> End
+    E -->|No| G{n == 2?}
+    G -->|Yes| H[print 0; print 1]
+    H --> End
+    G -->|No| I[a = 0; b = 1]
+    I --> J[print 0; print 1]
+    J --> K[i = 3]
+    K --> L{i <= n?}
+    L -->|No| End
+    L -->|Yes| M[temp = a + b]
+    M --> N[print temp]
+    N --> O[a = b]
+    O --> P[b = temp]
+    P --> Q[i = i + 1]
+    Q --> L
+
