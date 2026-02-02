@@ -154,3 +154,120 @@ impl Node {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::{BinaryOp, Expr};
+
+    #[test]
+    fn test_node_serialize_start() {
+        let node = Node::Start;
+        let json = serde_json::to_value(&node).unwrap();
+
+        assert_eq!(json["type"], "start");
+        // Start node has no other fields
+        assert!(json.get("id").is_none());
+    }
+
+    #[test]
+    fn test_node_serialize_end() {
+        let node = Node::End;
+        let json = serde_json::to_value(&node).unwrap();
+
+        assert_eq!(json["type"], "end");
+        // End node has no other fields
+        assert!(json.get("id").is_none());
+    }
+
+    #[test]
+    fn test_node_serialize_process() {
+        let node = Node::Process {
+            id: "A".to_string(),
+            statements: vec![Statement::Print {
+                expr: Expr::StrLit {
+                    value: "hello".to_string(),
+                },
+            }],
+        };
+        let json = serde_json::to_value(&node).unwrap();
+
+        assert_eq!(json["type"], "process");
+        assert_eq!(json["id"], "A");
+        assert!(json["statements"].is_array());
+        assert_eq!(json["statements"].as_array().unwrap().len(), 1);
+        assert_eq!(json["statements"][0]["type"], "print");
+    }
+
+    #[test]
+    fn test_node_serialize_process_multiple_statements() {
+        let node = Node::Process {
+            id: "B".to_string(),
+            statements: vec![
+                Statement::Assign {
+                    variable: "x".to_string(),
+                    value: Expr::IntLit { value: 5 },
+                },
+                Statement::Print {
+                    expr: Expr::Variable {
+                        name: "x".to_string(),
+                    },
+                },
+            ],
+        };
+        let json = serde_json::to_value(&node).unwrap();
+
+        assert_eq!(json["type"], "process");
+        assert_eq!(json["id"], "B");
+        assert_eq!(json["statements"].as_array().unwrap().len(), 2);
+        assert_eq!(json["statements"][0]["type"], "assign");
+        assert_eq!(json["statements"][1]["type"], "print");
+    }
+
+    #[test]
+    fn test_node_serialize_process_empty_statements() {
+        let node = Node::Process {
+            id: "Empty".to_string(),
+            statements: vec![],
+        };
+        let json = serde_json::to_value(&node).unwrap();
+
+        assert_eq!(json["type"], "process");
+        assert_eq!(json["id"], "Empty");
+        assert!(json["statements"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_node_serialize_condition() {
+        let node = Node::Condition {
+            id: "C".to_string(),
+            condition: Expr::Binary {
+                op: BinaryOp::Gt,
+                left: Box::new(Expr::Variable {
+                    name: "x".to_string(),
+                }),
+                right: Box::new(Expr::IntLit { value: 0 }),
+            },
+        };
+        let json = serde_json::to_value(&node).unwrap();
+
+        assert_eq!(json["type"], "condition");
+        assert_eq!(json["id"], "C");
+        assert_eq!(json["condition"]["type"], "binary");
+        assert_eq!(json["condition"]["op"], "gt");
+    }
+
+    #[test]
+    fn test_node_serialize_condition_simple() {
+        let node = Node::Condition {
+            id: "D".to_string(),
+            condition: Expr::BoolLit { value: true },
+        };
+        let json = serde_json::to_value(&node).unwrap();
+
+        assert_eq!(json["type"], "condition");
+        assert_eq!(json["id"], "D");
+        assert_eq!(json["condition"]["type"], "bool_lit");
+        assert_eq!(json["condition"]["value"], true);
+    }
+}
