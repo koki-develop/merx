@@ -937,4 +937,49 @@ mod tests {
         let result = parse(input);
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn test_parse_direction_td() {
+        let input = r#"flowchart TD
+    Start --> End
+"#;
+        let result = parse(input).unwrap();
+        assert!(matches!(result.direction, Direction::Td));
+    }
+
+    #[test]
+    fn test_parse_direction_tb() {
+        let input = r#"flowchart TB
+    Start --> End
+"#;
+        let result = parse(input).unwrap();
+        assert!(matches!(result.direction, Direction::Tb));
+    }
+
+    #[test]
+    fn test_parse_direction_lr() {
+        let input = r#"flowchart LR
+    Start --> End
+"#;
+        let result = parse(input).unwrap();
+        assert!(matches!(result.direction, Direction::Lr));
+    }
+
+    #[test]
+    fn test_parse_direction_rl() {
+        let input = r#"flowchart RL
+    Start --> End
+"#;
+        let result = parse(input).unwrap();
+        assert!(matches!(result.direction, Direction::Rl));
+    }
+
+    #[test]
+    fn test_parse_direction_bt() {
+        let input = r#"flowchart BT
+    Start --> End
+"#;
+        let result = parse(input).unwrap();
+        assert!(matches!(result.direction, Direction::Bt));
+    }
 }
