@@ -467,9 +467,10 @@ fn parse_statements(pair: Pair<Rule>) -> Result<Vec<Statement>, ParseError> {
 
 /// Parses a single statement.
 ///
-/// Supports three statement types:
-/// - `println expr`: Outputs the expression value to stdout
-/// - `error expr`: Outputs the expression value to stderr and terminates
+/// Supports four statement types:
+/// - `println expr`: Outputs the expression value to stdout with newline
+/// - `print expr`: Outputs the expression value to stdout without newline
+/// - `error expr`: Outputs the expression value to stderr
 /// - `variable = expr`: Assigns the expression value to a variable
 ///
 /// # Arguments
@@ -487,10 +488,15 @@ fn parse_statement(pair: Pair<Rule>) -> Result<Statement, ParseError> {
     let inner = pair.into_inner().next().unwrap();
 
     match inner.as_rule() {
-        Rule::print_stmt => {
+        Rule::println_stmt => {
             let expr_pair = inner.into_inner().next().unwrap();
             let expr = parse_expression(expr_pair)?;
             Ok(Statement::Print { expr })
+        }
+        Rule::print_stmt => {
+            let expr_pair = inner.into_inner().next().unwrap();
+            let expr = parse_expression(expr_pair)?;
+            Ok(Statement::PrintNoNewline { expr })
         }
         Rule::error_stmt => {
             let expr_pair = inner.into_inner().next().unwrap();

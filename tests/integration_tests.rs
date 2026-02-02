@@ -59,6 +59,10 @@ impl OutputWriter for MockOutputWriter {
         self.stdout.push(s.to_string());
     }
 
+    fn write_stdout_no_newline(&mut self, s: &str) {
+        self.stdout.push(s.to_string());
+    }
+
     fn write_stderr(&mut self, s: &str) {
         self.stderr.push(s.to_string());
     }
@@ -113,6 +117,17 @@ mod valid_flowcharts {
         let (stdout, stderr) = run_flowchart(source).expect("Should execute successfully");
 
         assert_eq!(stdout, vec!["Hello, World!"]);
+        assert!(stderr.is_empty());
+    }
+
+    #[test]
+    fn test_print_no_newline() {
+        let source = include_str!("fixtures/valid/print_no_newline.mmd");
+        let (stdout, stderr) = run_flowchart(source).expect("Should execute successfully");
+
+        // print outputs "Hello, " (without newline), then println outputs "World!" (with newline)
+        // In mock, both are captured as separate items
+        assert_eq!(stdout, vec!["Hello, ", "World!"]);
         assert!(stderr.is_empty());
     }
 

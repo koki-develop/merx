@@ -18,7 +18,8 @@ use super::Expr;
 /// | Variant | Mermaid Syntax | Description |
 /// |---------|----------------|-------------|
 /// | [`Assign`](Statement::Assign) | `x = expr` | Store value in variable |
-/// | [`Print`](Statement::Print) | `println expr` | Write to stdout |
+/// | [`Print`](Statement::Print) | `println expr` | Write to stdout with newline |
+/// | [`PrintNoNewline`](Statement::PrintNoNewline) | `print expr` | Write to stdout without newline |
 /// | [`Error`](Statement::Error) | `error expr` | Write to stderr and terminate |
 ///
 /// # Examples
@@ -91,6 +92,26 @@ pub enum Statement {
         expr: Expr,
     },
 
+    /// Print a value to standard output without a trailing newline.
+    ///
+    /// Evaluates the expression and writes the result to stdout without
+    /// appending a newline. This is useful for building output incrementally.
+    ///
+    /// # Mermaid Syntax
+    ///
+    /// ```text
+    /// print 'Hello, '
+    /// print x
+    /// ```
+    ///
+    /// # Output Format
+    ///
+    /// Same as [`Print`](Statement::Print), but without the trailing newline.
+    PrintNoNewline {
+        /// The expression to evaluate and print.
+        expr: Expr,
+    },
+
     /// Print an error message to stderr.
     ///
     /// Evaluates the expression and writes the result to stderr. Unlike `print`,
@@ -146,6 +167,20 @@ mod tests {
         assert_eq!(json["type"], "print");
         assert_eq!(json["expr"]["type"], "binary");
         assert_eq!(json["expr"]["op"], "add");
+    }
+
+    #[test]
+    fn test_statement_serialize_print_no_newline() {
+        let stmt = Statement::PrintNoNewline {
+            expr: Expr::StrLit {
+                value: "hello".to_string(),
+            },
+        };
+        let json = serde_json::to_value(&stmt).unwrap();
+
+        assert_eq!(json["type"], "print_no_newline");
+        assert_eq!(json["expr"]["type"], "str_lit");
+        assert_eq!(json["expr"]["value"], "hello");
     }
 
     #[test]

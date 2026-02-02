@@ -8,7 +8,8 @@
 //! | Statement | Syntax | Effect |
 //! |-----------|--------|--------|
 //! | `Assign` | `x = expr` | Sets variable to evaluated expression |
-//! | `Print` | `println expr` | Writes value to stdout |
+//! | `Print` | `println expr` | Writes value to stdout with newline |
+//! | `PrintNoNewline` | `print expr` | Writes value to stdout without newline |
 //! | `Error` | `error expr` | Writes value to stderr |
 //!
 //! # Output Handling
@@ -45,6 +46,9 @@ use super::eval::{InputReader, eval_expr};
 ///     fn write_stdout(&mut self, s: &str) {
 ///         self.stdout.push(s.to_string());
 ///     }
+///     fn write_stdout_no_newline(&mut self, s: &str) {
+///         self.stdout.push(s.to_string());
+///     }
 ///     fn write_stderr(&mut self, s: &str) {
 ///         self.stderr.push(s.to_string());
 ///     }
@@ -55,6 +59,11 @@ pub trait OutputWriter {
     ///
     /// The implementation should append a newline after the content.
     fn write_stdout(&mut self, s: &str);
+
+    /// Writes to standard output without a trailing newline.
+    ///
+    /// The implementation should flush stdout to ensure immediate output.
+    fn write_stdout_no_newline(&mut self, s: &str);
 
     /// Writes a line to standard error.
     ///
@@ -87,6 +96,12 @@ impl StdioWriter {
 impl OutputWriter for StdioWriter {
     fn write_stdout(&mut self, s: &str) {
         println!("{}", s);
+    }
+
+    fn write_stdout_no_newline(&mut self, s: &str) {
+        use std::io::{Write, stdout};
+        print!("{}", s);
+        stdout().flush().unwrap();
     }
 
     fn write_stderr(&mut self, s: &str) {
@@ -152,6 +167,11 @@ pub fn exec_statement<R: InputReader, W: OutputWriter>(
             output_writer.write_stdout(&val.to_string());
             Ok(())
         }
+        Statement::PrintNoNewline { expr } => {
+            let val = eval_expr(expr, env, input_reader)?;
+            output_writer.write_stdout_no_newline(&val.to_string());
+            Ok(())
+        }
         Statement::Error { message } => {
             let val = eval_expr(message, env, input_reader)?;
             output_writer.write_stderr(&val.to_string());
@@ -214,6 +234,10 @@ mod tests {
             self.stdout.push(s.to_string());
         }
 
+        fn write_stdout_no_newline(&mut self, s: &str) {
+            self.stdout.push(s.to_string());
+        }
+
         fn write_stderr(&mut self, s: &str) {
             self.stderr.push(s.to_string());
         }
@@ -268,6 +292,24 @@ mod tests {
         exec_statement(&stmt, &mut env, &mut input, &mut output).unwrap();
 
         assert_eq!(output.stdout, vec!["42"]);
+    }
+
+    #[test]
+    fn test_exec_print_no_newline() {
+        let mut env = Environment::new();
+        let mut input = MockInputReader::new(vec![]);
+        let mut output = MockOutputWriter::new();
+
+        let stmt = Statement::PrintNoNewline {
+            expr: Expr::StrLit {
+                value: "hello".to_string(),
+            },
+        };
+
+        exec_statement(&stmt, &mut env, &mut input, &mut output).unwrap();
+
+        assert_eq!(output.stdout, vec!["hello"]);
+        assert!(output.stderr.is_empty());
     }
 
     #[test]

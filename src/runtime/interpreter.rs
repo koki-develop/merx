@@ -460,6 +460,10 @@ mod tests {
             self.stdout.push(s.to_string());
         }
 
+        fn write_stdout_no_newline(&mut self, s: &str) {
+            self.stdout.push(s.to_string());
+        }
+
         fn write_stderr(&mut self, s: &str) {
             self.stderr.push(s.to_string());
         }

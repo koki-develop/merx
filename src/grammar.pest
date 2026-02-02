@@ -27,8 +27,9 @@ bare_identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
 // Statements
 statements = { statement ~ (";" ~ statement)* }
-statement = { print_stmt | error_stmt | assign_stmt }
-print_stmt = { "println" ~ expression }
+statement = { println_stmt | print_stmt | error_stmt | assign_stmt }
+println_stmt = { "println" ~ expression }
+print_stmt = { "print" ~ expression }
 error_stmt = { "error" ~ expression }
 assign_stmt = { identifier ~ "=" ~ expression }
 
