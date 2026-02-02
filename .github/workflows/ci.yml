@@ -26,6 +26,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
+      - run: rustup component add rustfmt clippy
       - run: cargo fmt --check
       - run: cargo clippy -- -D warnings
 
