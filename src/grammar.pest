@@ -1,0 +1,69 @@
+// Whitespace (auto-skipped)
+WHITESPACE = _{ " " | "\t" }
+
+// Flowchart
+flowchart = { SOI ~ "flowchart" ~ direction ~ NEWLINE* ~ line* ~ EOI }
+direction = { "TD" | "TB" | "LR" | "RL" | "BT" }
+
+// Lines
+line = { edge_def ~ NEWLINE* }
+
+// Edge definition
+edge_def = { node_ref ~ "-->" ~ edge_label? ~ node_ref }
+edge_label = { "|" ~ label_text ~ "|" }
+label_text = @{ (ASCII_ALPHANUMERIC | "_")+ }
+
+// Node reference (can be a definition or just an identifier)
+node_ref = { node_with_def | bare_identifier }
+node_with_def = { start_node | end_node | process_node | condition_node }
+start_node = { "Start" }
+end_node = { "End" }
+process_node = { identifier ~ "[" ~ statements ~ "]" }
+condition_node = { identifier ~ "{" ~ expression ~ "?" ~ "}" }
+
+// Identifier
+identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+bare_identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+
+// Statements
+statements = { statement ~ (";" ~ statement)* }
+statement = { print_stmt | error_stmt | assign_stmt }
+print_stmt = { "print" ~ expression }
+error_stmt = { "error" ~ expression }
+assign_stmt = { identifier ~ "=" ~ expression }
+
+// Expression (flat structure, precedence handled in code)
+expression = { unary_expr ~ (binary_op ~ unary_expr)* }
+unary_expr = { unary_op* ~ cast_expr }
+cast_expr = { primary ~ (as_keyword ~ type_name)? }
+primary = {
+    "(" ~ expression ~ ")"
+    | input_keyword
+    | bool_lit
+    | int_lit
+    | string_lit
+    | identifier
+}
+
+// Keywords
+input_keyword = { "input" }
+as_keyword = { "as" }
+
+// Operators
+unary_op = { "!" | "-" }
+binary_op = {
+    "||" | "&&"
+    | "==" | "!="
+    | "<=" | ">=" | "<" | ">"
+    | "+" | "-"
+    | "*" | "/" | "%"
+}
+
+// Literals
+bool_lit = { "true" | "false" }
+int_lit = @{ ASCII_DIGIT+ }
+string_lit = ${ "'" ~ string_inner ~ "'" }
+string_inner = @{ (!"'" ~ ANY)* }
+
+// Types
+type_name = { "int" | "str" }
