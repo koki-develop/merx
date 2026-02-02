@@ -819,4 +819,96 @@ mod tests {
         let result = eval_expr(&expr, &env, &mut input);
         assert!(matches!(result, Err(RuntimeError::TypeError { .. })));
     }
+
+    use crate::ast::{Node, Statement};
+    use crate::parser::parse;
+
+    /// Helper function to parse an expression from an assignment statement and evaluate it.
+    fn parse_and_eval(expr_str: &str) -> Value {
+        let input = format!(
+            r#"flowchart TD
+    Start --> A[result = {}]
+    A --> End
+"#,
+            expr_str
+        );
+        let flowchart = parse(&input).expect("Failed to parse");
+        let process_node = flowchart
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::Process { .. }))
+            .expect("Process node not found");
+        let expr = match process_node {
+            Node::Process { statements, .. } => match &statements[0] {
+                Statement::Assign { value, .. } => value.clone(),
+                _ => panic!("Expected Assign statement"),
+            },
+            _ => unreachable!(),
+        };
+
+        let env = Environment::new();
+        let mut mock_input = MockInputReader::new(vec![]);
+        eval_expr(&expr, &env, &mut mock_input).expect("Evaluation failed")
+    }
+
+    /// Helper function to parse a condition expression and evaluate it.
+    fn parse_and_eval_condition(expr_str: &str) -> Value {
+        let input = format!(
+            r#"flowchart TD
+    Start --> A{{{}?}}
+    A -->|Yes| End
+    A -->|No| End
+"#,
+            expr_str
+        );
+        let flowchart = parse(&input).expect("Failed to parse");
+        let condition_node = flowchart
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::Condition { .. }))
+            .expect("Condition node not found");
+        let expr = match condition_node {
+            Node::Condition { condition, .. } => condition.clone(),
+            _ => unreachable!(),
+        };
+
+        let env = Environment::new();
+        let mut mock_input = MockInputReader::new(vec![]);
+        eval_expr(&expr, &env, &mut mock_input).expect("Evaluation failed")
+    }
+
+    #[test]
+    fn test_left_associativity_subtraction() {
+        // 1 - 2 - 3 should be (1 - 2) - 3 = -1 - 3 = -4
+        let result = parse_and_eval("1 - 2 - 3");
+        assert_eq!(result, Value::Int(-4));
+    }
+
+    #[test]
+    fn test_left_associativity_division() {
+        // 12 / 3 / 2 should be (12 / 3) / 2 = 4 / 2 = 2
+        let result = parse_and_eval("12 / 3 / 2");
+        assert_eq!(result, Value::Int(2));
+    }
+
+    #[test]
+    fn test_precedence_add_mul() {
+        // 1 + 2 * 3 should be 1 + (2 * 3) = 1 + 6 = 7
+        let result = parse_and_eval("1 + 2 * 3");
+        assert_eq!(result, Value::Int(7));
+    }
+
+    #[test]
+    fn test_precedence_comparison_logical() {
+        // true && 1 < 2 should be true && (1 < 2) = true && true = true
+        let result = parse_and_eval_condition("true && 1 < 2");
+        assert_eq!(result, Value::Bool(true));
+    }
+
+    #[test]
+    fn test_complex_expression() {
+        // (1 + 2) * 3 - 4 / 2 should be ((1 + 2) * 3) - (4 / 2) = 9 - 2 = 7
+        let result = parse_and_eval("(1 + 2) * 3 - 4 / 2");
+        assert_eq!(result, Value::Int(7));
+    }
 }
