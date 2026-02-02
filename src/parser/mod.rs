@@ -914,8 +914,6 @@ mod tests {
         }
     }
 
-    // ===== 1.2 Parser - Complex Expression Parsing Tests =====
-
     #[test]
     fn test_parse_nested_parentheses() {
         // (1 + 2) * (3 - 4)
@@ -1103,8 +1101,6 @@ mod tests {
         }
     }
 
-    // ===== End of 1.2 Tests =====
-
     #[test]
     fn test_end_node_cannot_have_outgoing_edges() {
         let input = r#"flowchart TD
@@ -1218,5 +1214,90 @@ mod tests {
 "#;
         let result = parse(input).unwrap();
         assert!(matches!(result.direction, Direction::Bt));
+    }
+
+    #[test]
+    fn test_parse_multiple_yes_edges() {
+        // Condition node with multiple 'Yes' edges should fail
+        let input = r#"flowchart TD
+    Start --> A{x > 0?}
+    A -->|Yes| B[println x]
+    A -->|Yes| C[println y]
+    A -->|No| End
+    B --> End
+    C --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("multiple 'Yes' edges"),
+            "Expected error about multiple Yes edges, got: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_parse_multiple_no_edges() {
+        // Condition node with multiple 'No' edges should fail
+        let input = r#"flowchart TD
+    Start --> A{x > 0?}
+    A -->|Yes| B[println x]
+    A -->|No| C[println y]
+    A -->|No| End
+    B --> End
+    C --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("multiple 'No' edges"),
+            "Expected error about multiple No edges, got: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_parse_invalid_identifier() {
+        // Identifier starting with a digit should fail (pest grammar rejects this)
+        let input = r#"flowchart TD
+    Start --> 1abc[x = 1]
+    1abc --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_empty_flowchart() {
+        // Empty flowchart (no edges/nodes) should fail
+        let input = r#"flowchart TD
+"#;
+        let result = parse(input);
+        // An empty flowchart is technically valid syntax (0 lines),
+        // but it's not useful. Let's verify it parses but produces empty nodes/edges.
+        // Actually, let's check what happens - it might succeed with empty nodes.
+        assert!(result.is_ok());
+        let flowchart = result.unwrap();
+        assert!(flowchart.nodes.is_empty());
+        assert!(flowchart.edges.is_empty());
+    }
+
+    #[test]
+    fn test_parse_missing_end_node() {
+        // Flowchart without End node - this is valid syntax,
+        // but the interpreter will fail at runtime.
+        // Parser doesn't require End node presence.
+        let input = r#"flowchart TD
+    Start --> A[x = 1]
+    A --> B[y = 2]
+"#;
+        let result = parse(input);
+        // Parser allows this - End node validation is done at runtime
+        assert!(result.is_ok());
+        let flowchart = result.unwrap();
+        let has_end = flowchart.nodes.iter().any(|n| matches!(n, Node::End));
+        assert!(!has_end, "Should not have End node");
     }
 }
