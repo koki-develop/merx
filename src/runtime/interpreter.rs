@@ -753,4 +753,464 @@ mod tests {
 
         assert_eq!(interpreter.output_writer.stdout, vec!["1", "2", "3"]);
     }
+
+    #[test]
+    fn test_condition_non_bool_result() {
+        // Start --> A{42} --> End (condition evaluates to int, not bool)
+        let flowchart = Flowchart {
+            direction: Direction::Td,
+            nodes: vec![
+                Node::Start,
+                Node::Condition {
+                    id: "A".to_string(),
+                    condition: Expr::IntLit { value: 42 },
+                },
+                Node::End,
+            ],
+            edges: vec![
+                Edge {
+                    from: "Start".to_string(),
+                    to: "A".to_string(),
+                    label: None,
+                },
+                Edge {
+                    from: "A".to_string(),
+                    to: "End".to_string(),
+                    label: Some(EdgeLabel::Yes),
+                },
+            ],
+        };
+        let input = MockInputReader::new(vec![]);
+        let output = MockOutputWriter::new();
+
+        let mut interpreter = Interpreter::with_io(flowchart, input, output).unwrap();
+        let result = interpreter.run();
+
+        assert!(matches!(
+            result,
+            Err(RuntimeError::TypeError {
+                expected: "bool",
+                actual: "int",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn test_missing_yes_branch() {
+        // Start --> A{true} with only No edge
+        let flowchart = Flowchart {
+            direction: Direction::Td,
+            nodes: vec![
+                Node::Start,
+                Node::Condition {
+                    id: "A".to_string(),
+                    condition: Expr::BoolLit { value: true },
+                },
+                Node::End,
+            ],
+            edges: vec![
+                Edge {
+                    from: "Start".to_string(),
+                    to: "A".to_string(),
+                    label: None,
+                },
+                Edge {
+                    from: "A".to_string(),
+                    to: "End".to_string(),
+                    label: Some(EdgeLabel::No),
+                },
+            ],
+        };
+        let input = MockInputReader::new(vec![]);
+        let output = MockOutputWriter::new();
+
+        let mut interpreter = Interpreter::with_io(flowchart, input, output).unwrap();
+        let result = interpreter.run();
+
+        assert!(matches!(
+            result,
+            Err(RuntimeError::NoMatchingConditionEdge {
+                node_id,
+                condition_result: true,
+            }) if node_id == "A"
+        ));
+    }
+
+    #[test]
+    fn test_missing_no_branch() {
+        // Start --> A{false} with only Yes edge
+        let flowchart = Flowchart {
+            direction: Direction::Td,
+            nodes: vec![
+                Node::Start,
+                Node::Condition {
+                    id: "A".to_string(),
+                    condition: Expr::BoolLit { value: false },
+                },
+                Node::End,
+            ],
+            edges: vec![
+                Edge {
+                    from: "Start".to_string(),
+                    to: "A".to_string(),
+                    label: None,
+                },
+                Edge {
+                    from: "A".to_string(),
+                    to: "End".to_string(),
+                    label: Some(EdgeLabel::Yes),
+                },
+            ],
+        };
+        let input = MockInputReader::new(vec![]);
+        let output = MockOutputWriter::new();
+
+        let mut interpreter = Interpreter::with_io(flowchart, input, output).unwrap();
+        let result = interpreter.run();
+
+        assert!(matches!(
+            result,
+            Err(RuntimeError::NoMatchingConditionEdge {
+                node_id,
+                condition_result: false,
+            }) if node_id == "A"
+        ));
+    }
+
+    #[test]
+    fn test_edge_to_nonexistent_node() {
+        // Start --> NonExistent (node doesn't exist)
+        let flowchart = Flowchart {
+            direction: Direction::Td,
+            nodes: vec![Node::Start, Node::End],
+            edges: vec![Edge {
+                from: "Start".to_string(),
+                to: "NonExistent".to_string(),
+                label: None,
+            }],
+        };
+        let input = MockInputReader::new(vec![]);
+        let output = MockOutputWriter::new();
+
+        let mut interpreter = Interpreter::with_io(flowchart, input, output).unwrap();
+        let result = interpreter.run();
+
+        assert!(matches!(
+            result,
+            Err(RuntimeError::NodeNotFound { node_id }) if node_id == "NonExistent"
+        ));
+    }
+
+    #[test]
+    fn test_nested_conditions() {
+        // Start --> A{x > 0} -->|Yes| B{x > 5} -->|Yes| C[print 'big']
+        //                                       -->|No| D[print 'medium']
+        //           A -->|No| E[print 'negative']
+        // All paths --> End
+        let flowchart = Flowchart {
+            direction: Direction::Td,
+            nodes: vec![
+                Node::Start,
+                Node::Process {
+                    id: "Init".to_string(),
+                    statements: vec![Statement::Assign {
+                        variable: "x".to_string(),
+                        value: Expr::IntLit { value: 3 },
+                    }],
+                },
+                Node::Condition {
+                    id: "A".to_string(),
+                    condition: Expr::Binary {
+                        op: crate::ast::BinaryOp::Gt,
+                        left: Box::new(Expr::Variable {
+                            name: "x".to_string(),
+                        }),
+                        right: Box::new(Expr::IntLit { value: 0 }),
+                    },
+                },
+                Node::Condition {
+                    id: "B".to_string(),
+                    condition: Expr::Binary {
+                        op: crate::ast::BinaryOp::Gt,
+                        left: Box::new(Expr::Variable {
+                            name: "x".to_string(),
+                        }),
+                        right: Box::new(Expr::IntLit { value: 5 }),
+                    },
+                },
+                Node::Process {
+                    id: "C".to_string(),
+                    statements: vec![Statement::Print {
+                        expr: Expr::StrLit {
+                            value: "big".to_string(),
+                        },
+                    }],
+                },
+                Node::Process {
+                    id: "D".to_string(),
+                    statements: vec![Statement::Print {
+                        expr: Expr::StrLit {
+                            value: "medium".to_string(),
+                        },
+                    }],
+                },
+                Node::Process {
+                    id: "E".to_string(),
+                    statements: vec![Statement::Print {
+                        expr: Expr::StrLit {
+                            value: "negative".to_string(),
+                        },
+                    }],
+                },
+                Node::End,
+            ],
+            edges: vec![
+                Edge {
+                    from: "Start".to_string(),
+                    to: "Init".to_string(),
+                    label: None,
+                },
+                Edge {
+                    from: "Init".to_string(),
+                    to: "A".to_string(),
+                    label: None,
+                },
+                Edge {
+                    from: "A".to_string(),
+                    to: "B".to_string(),
+                    label: Some(EdgeLabel::Yes),
+                },
+                Edge {
+                    from: "A".to_string(),
+                    to: "E".to_string(),
+                    label: Some(EdgeLabel::No),
+                },
+                Edge {
+                    from: "B".to_string(),
+                    to: "C".to_string(),
+                    label: Some(EdgeLabel::Yes),
+                },
+                Edge {
+                    from: "B".to_string(),
+                    to: "D".to_string(),
+                    label: Some(EdgeLabel::No),
+                },
+                Edge {
+                    from: "C".to_string(),
+                    to: "End".to_string(),
+                    label: None,
+                },
+                Edge {
+                    from: "D".to_string(),
+                    to: "End".to_string(),
+                    label: None,
+                },
+                Edge {
+                    from: "E".to_string(),
+                    to: "End".to_string(),
+                    label: None,
+                },
+            ],
+        };
+        let input = MockInputReader::new(vec![]);
+        let output = MockOutputWriter::new();
+
+        let mut interpreter = Interpreter::with_io(flowchart, input, output).unwrap();
+        interpreter.run().unwrap();
+
+        // x = 3, so x > 0 (Yes) -> x > 5 (No) -> print "medium"
+        assert_eq!(interpreter.output_writer.stdout, vec!["medium"]);
+    }
+
+    #[test]
+    fn test_deep_nesting() {
+        // Create a chain of 5 nested conditions
+        // Start --> Init[x = 3] --> C1{x >= 1} -->|Yes| C2{x >= 2} -->|Yes| C3{x >= 3}
+        //                                                                   -->|Yes| C4{x >= 4} -->|Yes| P1[print 'level 4']
+        //                                                                                        -->|No| P2[print 'level 3']
+        //                                                                   -->|No| P3[print 'level 2']
+        //                                       -->|No| P4[print 'level 1']
+        //           C1 -->|No| P5[print 'level 0']
+        // All paths --> End
+        let flowchart = Flowchart {
+            direction: Direction::Td,
+            nodes: vec![
+                Node::Start,
+                Node::Process {
+                    id: "Init".to_string(),
+                    statements: vec![Statement::Assign {
+                        variable: "x".to_string(),
+                        value: Expr::IntLit { value: 3 },
+                    }],
+                },
+                Node::Condition {
+                    id: "C1".to_string(),
+                    condition: Expr::Binary {
+                        op: crate::ast::BinaryOp::Ge,
+                        left: Box::new(Expr::Variable {
+                            name: "x".to_string(),
+                        }),
+                        right: Box::new(Expr::IntLit { value: 1 }),
+                    },
+                },
+                Node::Condition {
+                    id: "C2".to_string(),
+                    condition: Expr::Binary {
+                        op: crate::ast::BinaryOp::Ge,
+                        left: Box::new(Expr::Variable {
+                            name: "x".to_string(),
+                        }),
+                        right: Box::new(Expr::IntLit { value: 2 }),
+                    },
+                },
+                Node::Condition {
+                    id: "C3".to_string(),
+                    condition: Expr::Binary {
+                        op: crate::ast::BinaryOp::Ge,
+                        left: Box::new(Expr::Variable {
+                            name: "x".to_string(),
+                        }),
+                        right: Box::new(Expr::IntLit { value: 3 }),
+                    },
+                },
+                Node::Condition {
+                    id: "C4".to_string(),
+                    condition: Expr::Binary {
+                        op: crate::ast::BinaryOp::Ge,
+                        left: Box::new(Expr::Variable {
+                            name: "x".to_string(),
+                        }),
+                        right: Box::new(Expr::IntLit { value: 4 }),
+                    },
+                },
+                Node::Process {
+                    id: "P1".to_string(),
+                    statements: vec![Statement::Print {
+                        expr: Expr::StrLit {
+                            value: "level 4".to_string(),
+                        },
+                    }],
+                },
+                Node::Process {
+                    id: "P2".to_string(),
+                    statements: vec![Statement::Print {
+                        expr: Expr::StrLit {
+                            value: "level 3".to_string(),
+                        },
+                    }],
+                },
+                Node::Process {
+                    id: "P3".to_string(),
+                    statements: vec![Statement::Print {
+                        expr: Expr::StrLit {
+                            value: "level 2".to_string(),
+                        },
+                    }],
+                },
+                Node::Process {
+                    id: "P4".to_string(),
+                    statements: vec![Statement::Print {
+                        expr: Expr::StrLit {
+                            value: "level 1".to_string(),
+                        },
+                    }],
+                },
+                Node::Process {
+                    id: "P5".to_string(),
+                    statements: vec![Statement::Print {
+                        expr: Expr::StrLit {
+                            value: "level 0".to_string(),
+                        },
+                    }],
+                },
+                Node::End,
+            ],
+            edges: vec![
+                Edge {
+                    from: "Start".to_string(),
+                    to: "Init".to_string(),
+                    label: None,
+                },
+                Edge {
+                    from: "Init".to_string(),
+                    to: "C1".to_string(),
+                    label: None,
+                },
+                Edge {
+                    from: "C1".to_string(),
+                    to: "C2".to_string(),
+                    label: Some(EdgeLabel::Yes),
+                },
+                Edge {
+                    from: "C1".to_string(),
+                    to: "P5".to_string(),
+                    label: Some(EdgeLabel::No),
+                },
+                Edge {
+                    from: "C2".to_string(),
+                    to: "C3".to_string(),
+                    label: Some(EdgeLabel::Yes),
+                },
+                Edge {
+                    from: "C2".to_string(),
+                    to: "P4".to_string(),
+                    label: Some(EdgeLabel::No),
+                },
+                Edge {
+                    from: "C3".to_string(),
+                    to: "C4".to_string(),
+                    label: Some(EdgeLabel::Yes),
+                },
+                Edge {
+                    from: "C3".to_string(),
+                    to: "P3".to_string(),
+                    label: Some(EdgeLabel::No),
+                },
+                Edge {
+                    from: "C4".to_string(),
+                    to: "P1".to_string(),
+                    label: Some(EdgeLabel::Yes),
+                },
+                Edge {
+                    from: "C4".to_string(),
+                    to: "P2".to_string(),
+                    label: Some(EdgeLabel::No),
+                },
+                Edge {
+                    from: "P1".to_string(),
+                    to: "End".to_string(),
+                    label: None,
+                },
+                Edge {
+                    from: "P2".to_string(),
+                    to: "End".to_string(),
+                    label: None,
+                },
+                Edge {
+                    from: "P3".to_string(),
+                    to: "End".to_string(),
+                    label: None,
+                },
+                Edge {
+                    from: "P4".to_string(),
+                    to: "End".to_string(),
+                    label: None,
+                },
+                Edge {
+                    from: "P5".to_string(),
+                    to: "End".to_string(),
+                    label: None,
+                },
+            ],
+        };
+        let input = MockInputReader::new(vec![]);
+        let output = MockOutputWriter::new();
+
+        let mut interpreter = Interpreter::with_io(flowchart, input, output).unwrap();
+        interpreter.run().unwrap();
+
+        // x = 3: C1(>=1 Yes) -> C2(>=2 Yes) -> C3(>=3 Yes) -> C4(>=4 No) -> P2 "level 3"
+        assert_eq!(interpreter.output_writer.stdout, vec!["level 3"]);
+    }
 }

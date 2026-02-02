@@ -307,4 +307,194 @@ mod tests {
             &super::super::value::Value::Str("test input".to_string())
         );
     }
+
+    #[test]
+    fn test_exec_multiple_statements() {
+        use super::super::value::Value;
+
+        let mut env = Environment::new();
+        let mut input = MockInputReader::new(vec![]);
+        let mut output = MockOutputWriter::new();
+
+        // Execute multiple statements sequentially
+        let statements = vec![
+            Statement::Assign {
+                variable: "x".to_string(),
+                value: Expr::IntLit { value: 10 },
+            },
+            Statement::Assign {
+                variable: "y".to_string(),
+                value: Expr::IntLit { value: 20 },
+            },
+            Statement::Assign {
+                variable: "z".to_string(),
+                value: Expr::Binary {
+                    op: crate::ast::BinaryOp::Add,
+                    left: Box::new(Expr::Variable {
+                        name: "x".to_string(),
+                    }),
+                    right: Box::new(Expr::Variable {
+                        name: "y".to_string(),
+                    }),
+                },
+            },
+            Statement::Print {
+                expr: Expr::Variable {
+                    name: "z".to_string(),
+                },
+            },
+        ];
+
+        for stmt in &statements {
+            exec_statement(stmt, &mut env, &mut input, &mut output).unwrap();
+        }
+
+        assert_eq!(env.get("x").unwrap(), &Value::Int(10));
+        assert_eq!(env.get("y").unwrap(), &Value::Int(20));
+        assert_eq!(env.get("z").unwrap(), &Value::Int(30));
+        assert_eq!(output.stdout, vec!["30"]);
+    }
+
+    #[test]
+    fn test_exec_error_propagation() {
+        let mut env = Environment::new();
+        let mut input = MockInputReader::new(vec![]);
+        let mut output = MockOutputWriter::new();
+
+        // Try to print an undefined variable - should propagate error
+        let stmt = Statement::Print {
+            expr: Expr::Variable {
+                name: "undefined_var".to_string(),
+            },
+        };
+
+        let result = exec_statement(&stmt, &mut env, &mut input, &mut output);
+        assert!(result.is_err());
+        match result {
+            Err(RuntimeError::UndefinedVariable { name }) => {
+                assert_eq!(name, "undefined_var");
+            }
+            _ => panic!("Expected UndefinedVariable error"),
+        }
+
+        // Try to assign from undefined variable
+        let stmt = Statement::Assign {
+            variable: "x".to_string(),
+            value: Expr::Variable {
+                name: "nonexistent".to_string(),
+            },
+        };
+
+        let result = exec_statement(&stmt, &mut env, &mut input, &mut output);
+        assert!(result.is_err());
+        match result {
+            Err(RuntimeError::UndefinedVariable { name }) => {
+                assert_eq!(name, "nonexistent");
+            }
+            _ => panic!("Expected UndefinedVariable error"),
+        }
+
+        // Try to use error statement with undefined variable
+        let stmt = Statement::Error {
+            message: Expr::Variable {
+                name: "missing".to_string(),
+            },
+        };
+
+        let result = exec_statement(&stmt, &mut env, &mut input, &mut output);
+        assert!(result.is_err());
+        match result {
+            Err(RuntimeError::UndefinedVariable { name }) => {
+                assert_eq!(name, "missing");
+            }
+            _ => panic!("Expected UndefinedVariable error"),
+        }
+    }
+
+    #[test]
+    fn test_exec_print_order() {
+        let mut env = Environment::new();
+        let mut input = MockInputReader::new(vec![]);
+        let mut output = MockOutputWriter::new();
+
+        // Execute multiple print statements and verify order is preserved
+        let statements = vec![
+            Statement::Print {
+                expr: Expr::StrLit {
+                    value: "first".to_string(),
+                },
+            },
+            Statement::Print {
+                expr: Expr::StrLit {
+                    value: "second".to_string(),
+                },
+            },
+            Statement::Print {
+                expr: Expr::StrLit {
+                    value: "third".to_string(),
+                },
+            },
+            Statement::Print {
+                expr: Expr::IntLit { value: 4 },
+            },
+            Statement::Print {
+                expr: Expr::BoolLit { value: true },
+            },
+        ];
+
+        for stmt in &statements {
+            exec_statement(stmt, &mut env, &mut input, &mut output).unwrap();
+        }
+
+        assert_eq!(output.stdout, vec!["first", "second", "third", "4", "true"]);
+    }
+
+    #[test]
+    fn test_exec_assign_from_input() {
+        use super::super::value::Value;
+
+        let mut env = Environment::new();
+        let mut input = MockInputReader::new(vec!["hello", "42", "true"]);
+        let mut output = MockOutputWriter::new();
+
+        // Assign multiple variables from input
+        let statements = vec![
+            Statement::Assign {
+                variable: "a".to_string(),
+                value: Expr::Input,
+            },
+            Statement::Assign {
+                variable: "b".to_string(),
+                value: Expr::Input,
+            },
+            Statement::Assign {
+                variable: "c".to_string(),
+                value: Expr::Input,
+            },
+        ];
+
+        for stmt in &statements {
+            exec_statement(stmt, &mut env, &mut input, &mut output).unwrap();
+        }
+
+        // All inputs are read as strings
+        assert_eq!(env.get("a").unwrap(), &Value::Str("hello".to_string()));
+        assert_eq!(env.get("b").unwrap(), &Value::Str("42".to_string()));
+        assert_eq!(env.get("c").unwrap(), &Value::Str("true".to_string()));
+
+        // Test input exhaustion - attempting to read more input should fail
+        let stmt = Statement::Assign {
+            variable: "d".to_string(),
+            value: Expr::Input,
+        };
+
+        let result = exec_statement(&stmt, &mut env, &mut input, &mut output);
+        assert!(result.is_err());
+        match result {
+            Err(RuntimeError::IoError { message }) => {
+                assert!(message.contains("No more input"));
+            }
+            _ => panic!("Expected IoError"),
+        }
+    }
 }

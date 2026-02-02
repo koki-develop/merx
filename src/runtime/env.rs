@@ -174,4 +174,121 @@ mod tests {
         env.set("x".to_string(), Value::Int(2));
         assert_eq!(env.get("x").unwrap(), &Value::Int(2));
     }
+
+    #[test]
+    fn test_env_many_variables() {
+        let mut env = Environment::new();
+
+        // Set 1000 variables
+        for i in 0..1000 {
+            env.set(format!("var_{}", i), Value::Int(i));
+        }
+
+        // Verify all variables are correctly stored
+        for i in 0..1000 {
+            assert_eq!(env.get(&format!("var_{}", i)).unwrap(), &Value::Int(i));
+        }
+
+        // Verify different value types can coexist
+        env.set("int_var".to_string(), Value::Int(42));
+        env.set("str_var".to_string(), Value::Str("hello".to_string()));
+        env.set("bool_var".to_string(), Value::Bool(true));
+
+        assert_eq!(env.get("int_var").unwrap(), &Value::Int(42));
+        assert_eq!(
+            env.get("str_var").unwrap(),
+            &Value::Str("hello".to_string())
+        );
+        assert_eq!(env.get("bool_var").unwrap(), &Value::Bool(true));
+    }
+
+    #[test]
+    fn test_env_multiple_overwrite() {
+        let mut env = Environment::new();
+
+        // Overwrite variable many times
+        for i in 0..100 {
+            env.set("x".to_string(), Value::Int(i));
+            assert_eq!(env.get("x").unwrap(), &Value::Int(i));
+        }
+
+        // Final value should be the last one set
+        assert_eq!(env.get("x").unwrap(), &Value::Int(99));
+
+        // Overwrite with different types
+        env.set("y".to_string(), Value::Int(1));
+        assert_eq!(env.get("y").unwrap(), &Value::Int(1));
+
+        env.set("y".to_string(), Value::Str("changed".to_string()));
+        assert_eq!(env.get("y").unwrap(), &Value::Str("changed".to_string()));
+
+        env.set("y".to_string(), Value::Bool(false));
+        assert_eq!(env.get("y").unwrap(), &Value::Bool(false));
+    }
+
+    #[test]
+    fn test_env_special_char_names() {
+        let mut env = Environment::new();
+
+        // Variable names with underscores
+        env.set("_leading_underscore".to_string(), Value::Int(1));
+        env.set("trailing_underscore_".to_string(), Value::Int(2));
+        env.set("__double__underscore__".to_string(), Value::Int(3));
+
+        assert_eq!(env.get("_leading_underscore").unwrap(), &Value::Int(1));
+        assert_eq!(env.get("trailing_underscore_").unwrap(), &Value::Int(2));
+        assert_eq!(env.get("__double__underscore__").unwrap(), &Value::Int(3));
+
+        // Variable names with numbers
+        env.set("var123".to_string(), Value::Int(4));
+        env.set("v1a2r3".to_string(), Value::Int(5));
+
+        assert_eq!(env.get("var123").unwrap(), &Value::Int(4));
+        assert_eq!(env.get("v1a2r3").unwrap(), &Value::Int(5));
+
+        // Long variable names
+        let long_name = "a".repeat(1000);
+        env.set(long_name.clone(), Value::Int(6));
+        assert_eq!(env.get(&long_name).unwrap(), &Value::Int(6));
+
+        // Single character names
+        env.set("a".to_string(), Value::Int(7));
+        env.set("_".to_string(), Value::Int(8));
+
+        assert_eq!(env.get("a").unwrap(), &Value::Int(7));
+        assert_eq!(env.get("_").unwrap(), &Value::Int(8));
+    }
+
+    #[test]
+    fn test_env_clone_independence() {
+        let mut env1 = Environment::new();
+        env1.set("x".to_string(), Value::Int(10));
+        env1.set("y".to_string(), Value::Str("original".to_string()));
+
+        // Clone the environment
+        let mut env2 = env1.clone();
+
+        // Verify clone has the same values
+        assert_eq!(env2.get("x").unwrap(), &Value::Int(10));
+        assert_eq!(env2.get("y").unwrap(), &Value::Str("original".to_string()));
+
+        // Modify the clone
+        env2.set("x".to_string(), Value::Int(20));
+        env2.set("z".to_string(), Value::Bool(true));
+
+        // Original should be unchanged
+        assert_eq!(env1.get("x").unwrap(), &Value::Int(10));
+        assert!(env1.get("z").is_err());
+
+        // Clone should have new values
+        assert_eq!(env2.get("x").unwrap(), &Value::Int(20));
+        assert_eq!(env2.get("z").unwrap(), &Value::Bool(true));
+
+        // Modify original
+        env1.set("y".to_string(), Value::Str("modified".to_string()));
+
+        // Original changed, clone unchanged
+        assert_eq!(env1.get("y").unwrap(), &Value::Str("modified".to_string()));
+        assert_eq!(env2.get("y").unwrap(), &Value::Str("original".to_string()));
+    }
 }

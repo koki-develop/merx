@@ -224,4 +224,104 @@ mod tests {
         assert_eq!(Value::Int(42).as_str(), None);
         assert_eq!(Value::Bool(true).as_str(), None);
     }
+
+    #[test]
+    fn test_value_empty_string() {
+        let empty = Value::Str(String::new());
+        assert_eq!(empty.type_name(), "str");
+        assert_eq!(empty.as_str(), Some(""));
+        assert_eq!(empty.to_string(), "");
+
+        let empty2 = Value::Str("".to_string());
+        assert_eq!(empty, empty2);
+    }
+
+    #[test]
+    fn test_value_unicode_string() {
+        let japanese = Value::Str("こんにちは".to_string());
+        assert_eq!(japanese.type_name(), "str");
+        assert_eq!(japanese.as_str(), Some("こんにちは"));
+        assert_eq!(japanese.to_string(), "こんにちは");
+
+        let emoji = Value::Str("Hello 🌍🚀".to_string());
+        assert_eq!(emoji.as_str(), Some("Hello 🌍🚀"));
+        assert_eq!(emoji.to_string(), "Hello 🌍🚀");
+
+        let mixed = Value::Str("日本語とEnglish混在".to_string());
+        assert_eq!(mixed.as_str(), Some("日本語とEnglish混在"));
+    }
+
+    #[test]
+    fn test_value_long_string() {
+        let long_str = "a".repeat(10_000);
+        let value = Value::Str(long_str.clone());
+        assert_eq!(value.type_name(), "str");
+        assert_eq!(value.as_str(), Some(long_str.as_str()));
+        assert_eq!(value.to_string().len(), 10_000);
+
+        let very_long = "x".repeat(1_000_000);
+        let value2 = Value::Str(very_long.clone());
+        assert_eq!(value2.as_str().map(|s| s.len()), Some(1_000_000));
+    }
+
+    #[test]
+    fn test_value_special_chars() {
+        let newline = Value::Str("line1\nline2".to_string());
+        assert_eq!(newline.as_str(), Some("line1\nline2"));
+        assert_eq!(newline.to_string(), "line1\nline2");
+
+        let tab = Value::Str("col1\tcol2".to_string());
+        assert_eq!(tab.as_str(), Some("col1\tcol2"));
+
+        let backslash = Value::Str("path\\to\\file".to_string());
+        assert_eq!(backslash.as_str(), Some("path\\to\\file"));
+
+        let mixed_special = Value::Str("a\nb\tc\\d".to_string());
+        assert_eq!(mixed_special.as_str(), Some("a\nb\tc\\d"));
+
+        let carriage_return = Value::Str("line1\r\nline2".to_string());
+        assert_eq!(carriage_return.as_str(), Some("line1\r\nline2"));
+
+        let null_char = Value::Str("before\0after".to_string());
+        assert_eq!(null_char.as_str(), Some("before\0after"));
+    }
+
+    #[test]
+    fn test_value_partial_eq() {
+        // Int == Int
+        assert_eq!(Value::Int(42), Value::Int(42));
+        assert_ne!(Value::Int(42), Value::Int(43));
+        assert_eq!(Value::Int(0), Value::Int(0));
+        assert_eq!(Value::Int(-1), Value::Int(-1));
+        assert_eq!(Value::Int(i64::MAX), Value::Int(i64::MAX));
+        assert_eq!(Value::Int(i64::MIN), Value::Int(i64::MIN));
+
+        // Str == Str
+        assert_eq!(
+            Value::Str("hello".to_string()),
+            Value::Str("hello".to_string())
+        );
+        assert_ne!(
+            Value::Str("hello".to_string()),
+            Value::Str("world".to_string())
+        );
+        assert_eq!(Value::Str(String::new()), Value::Str(String::new()));
+
+        // Bool == Bool
+        assert_eq!(Value::Bool(true), Value::Bool(true));
+        assert_eq!(Value::Bool(false), Value::Bool(false));
+        assert_ne!(Value::Bool(true), Value::Bool(false));
+
+        // Int != Str
+        assert_ne!(Value::Int(42), Value::Str("42".to_string()));
+        assert_ne!(Value::Int(0), Value::Str("0".to_string()));
+
+        // Int != Bool
+        assert_ne!(Value::Int(1), Value::Bool(true));
+        assert_ne!(Value::Int(0), Value::Bool(false));
+
+        // Str != Bool
+        assert_ne!(Value::Str("true".to_string()), Value::Bool(true));
+        assert_ne!(Value::Str("false".to_string()), Value::Bool(false));
+    }
 }
