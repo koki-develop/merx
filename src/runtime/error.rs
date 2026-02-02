@@ -20,8 +20,6 @@
 //! ## Structural Errors
 //! - [`MissingStartNode`](RuntimeError::MissingStartNode) - Flowchart lacks a `Start` node
 //! - [`MissingEndNode`](RuntimeError::MissingEndNode) - Flowchart lacks an `End` node
-//! - [`MultipleStartNodes`](RuntimeError::MultipleStartNodes) - More than one `Start` node
-//! - [`MultipleEndNodes`](RuntimeError::MultipleEndNodes) - More than one `End` node
 //!
 //! ## Navigation Errors
 //! - [`NoOutgoingEdge`](RuntimeError::NoOutgoingEdge) - Node has no edge to follow
@@ -118,17 +116,6 @@ pub enum RuntimeError {
     /// execution terminates.
     MissingEndNode,
 
-    /// Flowchart contains more than one `Start` node.
-    ///
-    /// Only one `Start` node is allowed per flowchart to ensure
-    /// deterministic execution order.
-    MultipleStartNodes,
-
-    /// Flowchart contains more than one `End` node.
-    ///
-    /// Only one `End` node is allowed per flowchart.
-    MultipleEndNodes,
-
     /// Node has no outgoing edge.
     ///
     /// Non-terminal nodes must have at least one outgoing edge.
@@ -213,12 +200,6 @@ impl fmt::Display for RuntimeError {
             }
             RuntimeError::MissingEndNode => {
                 write!(f, "Missing 'End' node")
-            }
-            RuntimeError::MultipleStartNodes => {
-                write!(f, "Multiple 'Start' nodes found")
-            }
-            RuntimeError::MultipleEndNodes => {
-                write!(f, "Multiple 'End' nodes found")
             }
             RuntimeError::NoOutgoingEdge { node_id } => {
                 write!(f, "No outgoing edge from node '{}'", node_id)

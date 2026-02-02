@@ -144,8 +144,6 @@ impl Interpreter<StdinReader<io::BufReader<io::Stdin>>, StdioWriter> {
     ///
     /// - [`RuntimeError::MissingStartNode`] - No `Start` node found
     /// - [`RuntimeError::MissingEndNode`] - No `End` node found
-    /// - [`RuntimeError::MultipleStartNodes`] - More than one `Start` node
-    /// - [`RuntimeError::MultipleEndNodes`] - More than one `End` node
     ///
     /// # Examples
     ///
@@ -182,8 +180,6 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
     /// Same as [`Interpreter::new`]:
     /// - [`RuntimeError::MissingStartNode`]
     /// - [`RuntimeError::MissingEndNode`]
-    /// - [`RuntimeError::MultipleStartNodes`]
-    /// - [`RuntimeError::MultipleEndNodes`]
     ///
     /// # Implementation Details
     ///
@@ -216,14 +212,8 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
         if start_count == 0 {
             return Err(RuntimeError::MissingStartNode);
         }
-        if start_count > 1 {
-            return Err(RuntimeError::MultipleStartNodes);
-        }
         if end_count == 0 {
             return Err(RuntimeError::MissingEndNode);
-        }
-        if end_count > 1 {
-            return Err(RuntimeError::MultipleEndNodes);
         }
 
         // Build the outgoing edge map
