@@ -1,8 +1,14 @@
 // Whitespace (auto-skipped)
 WHITESPACE = _{ " " | "\t" }
 
+// Comment (auto-skipped between tokens)
+COMMENT = _{ "%%" ~ (!NEWLINE ~ ANY)* }
+
+// Blank or comment line (for start of file)
+skip_line = _{ ("%%" ~ (!NEWLINE ~ ANY)*)? ~ NEWLINE }
+
 // Flowchart
-flowchart = { SOI ~ "flowchart" ~ direction ~ NEWLINE* ~ line* ~ EOI }
+flowchart = { SOI ~ skip_line* ~ "flowchart" ~ direction ~ NEWLINE* ~ line* ~ EOI }
 direction = { "TD" | "TB" | "LR" | "RL" | "BT" }
 
 // Lines

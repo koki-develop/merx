@@ -1306,4 +1306,132 @@ mod tests {
         let has_end = flowchart.nodes.iter().any(|n| matches!(n, Node::End));
         assert!(!has_end, "Should not have End node");
     }
+
+    #[test]
+    fn test_parse_comment_at_start() {
+        let input = r#"%% This is a comment
+flowchart TD
+    Start --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_ok(), "Should parse with comment at start");
+    }
+
+    #[test]
+    fn test_parse_multiple_comment_lines_at_start() {
+        let input = r#"%% First comment
+%% Second comment
+%% Third comment
+flowchart TD
+    Start --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_ok(), "Should parse with multiple comment lines");
+    }
+
+    #[test]
+    fn test_parse_inline_comment() {
+        let input = r#"flowchart TD
+    Start --> A[x = 1] %% Inline comment
+    A --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_ok(), "Should parse with inline comment");
+        let flowchart = result.unwrap();
+        assert_eq!(flowchart.edges.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_comment_after_direction() {
+        let input = r#"flowchart TD %% direction comment
+    Start --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_ok(), "Should parse with comment after direction");
+    }
+
+    #[test]
+    fn test_parse_empty_comment() {
+        let input = r#"%%
+flowchart TD
+    Start --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_ok(), "Should parse with empty comment");
+    }
+
+    #[test]
+    fn test_parse_comment_with_special_chars() {
+        let input = r#"%% Comment with special chars: !@#$%^&*(){}[]|
+flowchart TD
+    Start --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_ok(), "Should parse with special chars in comment");
+    }
+
+    #[test]
+    fn test_parse_percent_in_string_not_comment() {
+        // %% inside string literal should NOT be treated as comment
+        let input = r#"flowchart TD
+    Start --> A[println '%% not a comment']
+    A --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_ok(), "Should parse with %% inside string literal");
+        let flowchart = result.unwrap();
+        assert_eq!(flowchart.edges.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_comment_between_edges() {
+        let input = r#"flowchart TD
+    Start --> A[x = 1]
+    %% Comment on its own line
+    A --> End
+"#;
+        let result = parse(input);
+        assert!(
+            result.is_ok(),
+            "Should parse with comment between edge definitions"
+        );
+        let flowchart = result.unwrap();
+        assert_eq!(flowchart.edges.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_comment_at_eof_no_trailing_newline() {
+        let input = "flowchart TD\n    Start --> End\n%% Final comment with no newline";
+        let result = parse(input);
+        assert!(
+            result.is_ok(),
+            "Should parse with comment at EOF without trailing newline"
+        );
+    }
+
+    #[test]
+    fn test_parse_blank_and_comment_lines_at_start() {
+        let input = r#"
+%% Comment after blank line
+
+%% Another comment
+flowchart TD
+    Start --> End
+"#;
+        let result = parse(input);
+        assert!(
+            result.is_ok(),
+            "Should parse with mixed blank and comment lines at start"
+        );
+    }
+
+    #[test]
+    fn test_parse_comment_containing_double_percent() {
+        let input = r#"%% This comment has %% another %% in it
+flowchart TD
+    Start --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_ok(), "Should parse with %% inside comment");
+    }
 }

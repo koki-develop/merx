@@ -203,6 +203,15 @@ mod valid_flowcharts {
         assert!(stdout.is_empty());
         assert_eq!(stderr, vec!["This is an error message"]);
     }
+
+    #[test]
+    fn test_comment() {
+        let source = include_str!("fixtures/valid/comment.mmd");
+        let (stdout, stderr) = run_flowchart(source).expect("Should execute successfully");
+
+        assert_eq!(stdout, vec!["Hello"]);
+        assert!(stderr.is_empty());
+    }
 }
 
 // =============================================================================
