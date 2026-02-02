@@ -1,20 +1,84 @@
+//! Statement execution.
+//!
+//! This module handles the execution of statements ([`Statement`]) which
+//! produce side effects such as variable assignments and output.
+//!
+//! # Statement Types
+//!
+//! | Statement | Syntax | Effect |
+//! |-----------|--------|--------|
+//! | `Assign` | `x = expr` | Sets variable to evaluated expression |
+//! | `Print` | `print expr` | Writes value to stdout |
+//! | `Error` | `error expr` | Writes value to stderr |
+//!
+//! # Output Handling
+//!
+//! The executor uses the [`OutputWriter`] trait for output operations,
+//! allowing dependency injection for testing. Output is line-based:
+//! each `print` or `error` statement produces one line.
+
 use crate::ast::Statement;
 
 use super::env::Environment;
 use super::error::RuntimeError;
 use super::eval::{InputReader, eval_expr};
 
-/// Trait for writing output (for testability).
+/// Abstraction for writing program output.
+///
+/// This trait allows the runtime to write output to different destinations,
+/// enabling both production use (stdout/stderr) and testing (captured output).
+///
+/// # Implementors
+///
+/// - [`StdioWriter`] - Writes to standard output/error
+/// - Test code can provide mock implementations
+///
+/// # Examples
+///
+/// ```ignore
+/// struct CapturedOutput {
+///     stdout: Vec<String>,
+///     stderr: Vec<String>,
+/// }
+///
+/// impl OutputWriter for CapturedOutput {
+///     fn write_stdout(&mut self, s: &str) {
+///         self.stdout.push(s.to_string());
+///     }
+///     fn write_stderr(&mut self, s: &str) {
+///         self.stderr.push(s.to_string());
+///     }
+/// }
+/// ```
 pub trait OutputWriter {
+    /// Writes a line to standard output.
+    ///
+    /// The implementation should append a newline after the content.
     fn write_stdout(&mut self, s: &str);
+
+    /// Writes a line to standard error.
+    ///
+    /// The implementation should append a newline after the content.
     fn write_stderr(&mut self, s: &str);
 }
 
-/// Writes to standard output and standard error.
+/// Output writer that writes to standard output and error.
+///
+/// This is the default output writer used in production. It uses
+/// [`println!`] for stdout and [`eprintln!`] for stderr.
+///
+/// # Examples
+///
+/// ```
+/// use merx::runtime::StdioWriter;
+///
+/// let writer = StdioWriter::new();
+/// ```
 #[derive(Default)]
 pub struct StdioWriter;
 
 impl StdioWriter {
+    /// Creates a new stdio writer.
     pub fn new() -> Self {
         Self
     }
@@ -30,7 +94,47 @@ impl OutputWriter for StdioWriter {
     }
 }
 
-/// Executes a statement.
+/// Executes a single statement.
+///
+/// This function handles all statement types, evaluating expressions
+/// and performing the appropriate side effects.
+///
+/// # Arguments
+///
+/// * `stmt` - The statement AST node to execute
+/// * `env` - The variable environment (may be modified by assignment)
+/// * `input_reader` - The input source (used if statement contains `input` expression)
+/// * `output_writer` - The output destination for print/error statements
+///
+/// # Returns
+///
+/// `Ok(())` on success, or a [`RuntimeError`] if execution fails.
+///
+/// # Errors
+///
+/// Any error from expression evaluation is propagated. Common errors:
+///
+/// - [`RuntimeError::UndefinedVariable`] - Expression references undefined variable
+/// - [`RuntimeError::TypeError`] - Type mismatch in expression
+/// - [`RuntimeError::IoError`] - Input reading failed
+///
+/// # Examples
+///
+/// ```ignore
+/// use merx::ast::{Statement, Expr};
+/// use merx::runtime::{Environment, exec_statement, StdinReader, StdioWriter};
+///
+/// let stmt = Statement::Print {
+///     expr: Expr::StrLit { value: "Hello".to_string() },
+/// };
+///
+/// let mut env = Environment::new();
+/// let mut input = StdinReader::new();
+/// let mut output = StdioWriter::new();
+///
+/// exec_statement(&stmt, &mut env, &mut input, &mut output).unwrap();
+/// // Prints: Hello
+/// ```
 pub fn exec_statement<R: InputReader, W: OutputWriter>(
     stmt: &Statement,
     env: &mut Environment,

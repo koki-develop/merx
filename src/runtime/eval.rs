@@ -1,3 +1,47 @@
+//! Expression evaluation.
+//!
+//! This module handles the evaluation of expressions ([`Expr`]) to produce
+//! runtime values ([`Value`]).
+//!
+//! # Overview
+//!
+//! The evaluator recursively processes expression trees, handling:
+//!
+//! - **Literals**: Integer, string, and boolean constants
+//! - **Variables**: Lookups in the environment
+//! - **Input**: Reading from stdin
+//! - **Unary operations**: Negation (`-`) and logical NOT (`!`)
+//! - **Binary operations**: Arithmetic, comparison, equality, and logical operators
+//! - **Type casts**: Explicit type conversions via `as`
+//!
+//! # Operator Semantics
+//!
+//! ## Arithmetic (`+`, `-`, `*`, `/`, `%`)
+//!
+//! - Operands must be integers
+//! - Addition, subtraction, and multiplication use wrapping semantics
+//! - Division and modulo check for zero divisor
+//!
+//! ## Comparison (`<`, `<=`, `>`, `>=`)
+//!
+//! - Operands must be integers
+//! - Returns boolean
+//!
+//! ## Equality (`==`, `!=`)
+//!
+//! - Any types allowed (including cross-type comparison)
+//! - Different types are never equal
+//!
+//! ## Logical (`&&`, `||`)
+//!
+//! - Operands must be booleans
+//! - NOT short-circuiting (both sides always evaluated)
+//!
+//! # Input Handling
+//!
+//! The evaluator uses the [`InputReader`] trait for input operations,
+//! allowing dependency injection for testing.
+
 use std::io::{self, BufRead};
 
 use crate::ast::{BinaryOp, Expr, TypeName, UnaryOp};
@@ -6,17 +50,68 @@ use super::env::Environment;
 use super::error::RuntimeError;
 use super::value::Value;
 
-/// Trait for reading input (for testability).
+/// Abstraction for reading user input.
+///
+/// This trait allows the runtime to read input from different sources,
+/// enabling both production use (stdin) and testing (mock input).
+///
+/// # Implementors
+///
+/// - [`StdinReader`] - Reads from standard input
+/// - Test code can provide mock implementations
+///
+/// # Examples
+///
+/// ```ignore
+/// struct MockInput(Vec<String>);
+///
+/// impl InputReader for MockInput {
+///     fn read_line(&mut self) -> Result<String, RuntimeError> {
+///         self.0.pop()
+///             .ok_or_else(|| RuntimeError::IoError {
+///                 message: "No more input".to_string()
+///             })
+///     }
+/// }
+/// ```
 pub trait InputReader {
+    /// Reads a single line of input.
+    ///
+    /// # Returns
+    ///
+    /// The input line with trailing newlines stripped.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RuntimeError::IoError`] if reading fails.
     fn read_line(&mut self) -> Result<String, RuntimeError>;
 }
 
-/// Reads from standard input.
+/// Input reader that reads from standard input.
+///
+/// This is the default input reader used in production. It wraps a
+/// [`BufRead`] implementation (typically buffered stdin).
+///
+/// # Type Parameter
+///
+/// - `R` - The underlying reader type, must implement [`BufRead`]
+///
+/// # Examples
+///
+/// ```
+/// use merx::runtime::StdinReader;
+///
+/// // Create a reader for standard input
+/// let reader = StdinReader::new();
+/// ```
 pub struct StdinReader<R: BufRead> {
     reader: R,
 }
 
 impl StdinReader<io::BufReader<io::Stdin>> {
+    /// Creates a new stdin reader.
+    ///
+    /// This creates a buffered reader wrapping standard input.
     pub fn new() -> Self {
         Self {
             reader: io::BufReader::new(io::stdin()),
@@ -31,6 +126,9 @@ impl Default for StdinReader<io::BufReader<io::Stdin>> {
 }
 
 impl<R: BufRead> InputReader for StdinReader<R> {
+    /// Reads a line from the underlying reader.
+    ///
+    /// Trailing CR and LF characters are stripped from the result.
     fn read_line(&mut self) -> Result<String, RuntimeError> {
         let mut buf = String::new();
         self.reader
@@ -43,7 +141,45 @@ impl<R: BufRead> InputReader for StdinReader<R> {
     }
 }
 
-/// Evaluates an expression and returns a Value.
+/// Evaluates an expression to produce a runtime value.
+///
+/// This is the main entry point for expression evaluation. It recursively
+/// evaluates the expression tree, performing operations and returning the
+/// final value.
+///
+/// # Arguments
+///
+/// * `expr` - The expression AST node to evaluate
+/// * `env` - The variable environment for lookups
+/// * `input_reader` - The input source for `input` expressions
+///
+/// # Returns
+///
+/// The evaluated [`Value`], or a [`RuntimeError`] if evaluation fails.
+///
+/// # Errors
+///
+/// - [`RuntimeError::UndefinedVariable`] - Variable not in environment
+/// - [`RuntimeError::TypeError`] - Operation applied to wrong type
+/// - [`RuntimeError::CastError`] - Type cast failed
+/// - [`RuntimeError::DivisionByZero`] - Division/modulo by zero
+/// - [`RuntimeError::IoError`] - Input reading failed
+///
+/// # Examples
+///
+/// ```
+/// use merx::ast::Expr;
+/// use merx::runtime::{Environment, Value, StdinReader, eval_expr};
+///
+/// let mut env = Environment::new();
+/// env.set("x".to_string(), Value::Int(5));
+///
+/// let mut input = StdinReader::new();
+/// let expr = Expr::Variable { name: "x".to_string() };
+///
+/// // Note: This example won't actually compile in doc tests due to
+/// // stdin not being mockable, but illustrates the API
+/// ```
 pub fn eval_expr<R: InputReader>(
     expr: &Expr,
     env: &Environment,
@@ -80,6 +216,26 @@ pub fn eval_expr<R: InputReader>(
 }
 
 /// Evaluates a unary operation.
+///
+/// # Supported Operations
+///
+/// | Operator | Operand Type | Result Type | Description |
+/// |----------|--------------|-------------|-------------|
+/// | `!` | `bool` | `bool` | Logical NOT |
+/// | `-` | `int` | `int` | Numeric negation |
+///
+/// # Arguments
+///
+/// * `op` - The unary operator
+/// * `operand` - The operand value
+///
+/// # Returns
+///
+/// The result of applying the operator, or a type error.
+///
+/// # Errors
+///
+/// Returns [`RuntimeError::TypeError`] if the operand has the wrong type.
 fn eval_unary(op: UnaryOp, operand: Value) -> Result<Value, RuntimeError> {
     match op {
         UnaryOp::Not => {
@@ -102,6 +258,44 @@ fn eval_unary(op: UnaryOp, operand: Value) -> Result<Value, RuntimeError> {
 }
 
 /// Evaluates a binary operation.
+///
+/// # Operator Categories
+///
+/// ## Arithmetic (requires `int` operands, returns `int`)
+/// - `+` Addition (wrapping)
+/// - `-` Subtraction (wrapping)
+/// - `*` Multiplication (wrapping)
+/// - `/` Division (truncating toward zero)
+/// - `%` Modulo (remainder)
+///
+/// ## Comparison (requires `int` operands, returns `bool`)
+/// - `<` Less than
+/// - `<=` Less than or equal
+/// - `>` Greater than
+/// - `>=` Greater than or equal
+///
+/// ## Equality (any types, returns `bool`)
+/// - `==` Equal (types must match for true)
+/// - `!=` Not equal
+///
+/// ## Logical (requires `bool` operands, returns `bool`)
+/// - `&&` Logical AND (not short-circuiting)
+/// - `||` Logical OR (not short-circuiting)
+///
+/// # Arguments
+///
+/// * `op` - The binary operator
+/// * `left` - The left operand value
+/// * `right` - The right operand value
+///
+/// # Returns
+///
+/// The result of applying the operator.
+///
+/// # Errors
+///
+/// - [`RuntimeError::TypeError`] - Operand has wrong type for operator
+/// - [`RuntimeError::DivisionByZero`] - Division or modulo by zero
 fn eval_binary(op: BinaryOp, left: Value, right: Value) -> Result<Value, RuntimeError> {
     match op {
         // Arithmetic (int only)
@@ -185,7 +379,34 @@ fn eval_binary(op: BinaryOp, left: Value, right: Value) -> Result<Value, Runtime
     }
 }
 
-/// Evaluates a type cast.
+/// Evaluates a type cast expression.
+///
+/// # Supported Casts
+///
+/// | From | To | Behavior |
+/// |------|-----|----------|
+/// | `int` | `int` | Identity (no-op) |
+/// | `str` | `int` | Parse as decimal integer |
+/// | `bool` | `int` | **Error** - not supported |
+/// | `int` | `str` | Decimal string representation |
+/// | `str` | `str` | Identity (no-op) |
+/// | `bool` | `str` | `"true"` or `"false"` |
+///
+/// Note: Casting to `bool` is not supported in the language.
+///
+/// # Arguments
+///
+/// * `val` - The value to cast
+/// * `target` - The target type
+///
+/// # Returns
+///
+/// The cast value.
+///
+/// # Errors
+///
+/// Returns [`RuntimeError::CastError`] if the cast is not supported
+/// or if string-to-int parsing fails.
 fn eval_cast(val: Value, target: TypeName) -> Result<Value, RuntimeError> {
     match target {
         TypeName::Int => match val {

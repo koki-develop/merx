@@ -1,3 +1,58 @@
+//! Flowchart interpreter and execution engine.
+//!
+//! This module provides the [`Interpreter`] struct, which executes a parsed
+//! Mermaid flowchart as a program.
+//!
+//! # Execution Model
+//!
+//! The interpreter follows a graph-based execution model:
+//!
+//! 1. **Initialization**: Build node and edge lookup tables from the flowchart
+//! 2. **Validation**: Ensure exactly one Start and one End node exist
+//! 3. **Execution**: Starting from `Start`, follow edges through the graph
+//! 4. **Termination**: Execution ends when the `End` node is reached
+//!
+//! # Node Handling
+//!
+//! | Node Type | Behavior |
+//! |-----------|----------|
+//! | `Start` | Entry point; follow single outgoing edge |
+//! | `End` | Terminal; execution stops |
+//! | `Process` | Execute all statements; follow single outgoing edge |
+//! | `Condition` | Evaluate expression; follow Yes or No edge based on result |
+//!
+//! # Control Flow
+//!
+//! - **Sequential**: Process nodes have one outgoing edge
+//! - **Conditional**: Condition nodes have two labeled edges (Yes/No)
+//! - **Loops**: Edges can point to earlier nodes, creating loops
+//!
+//! # I/O Abstraction
+//!
+//! The interpreter is generic over input and output types, allowing:
+//! - Production use with stdin/stdout
+//! - Testing with mock I/O
+//!
+//! # Example
+//!
+//! ```ignore
+//! use merx::parser;
+//! use merx::runtime::Interpreter;
+//!
+//! let source = r#"
+//! flowchart TD
+//!     Start --> A[x = input]
+//!     A --> B{x == "quit"}
+//!     B -->|Yes| End
+//!     B -->|No| C[print x]
+//!     C --> A
+//! "#;
+//!
+//! let flowchart = parser::parse(source).unwrap();
+//! let mut interpreter = Interpreter::new(flowchart).unwrap();
+//! interpreter.run().unwrap();
+//! ```
+
 use std::collections::HashMap;
 use std::io;
 
@@ -8,31 +63,135 @@ use super::error::RuntimeError;
 use super::eval::{InputReader, StdinReader, eval_expr};
 use super::exec::{OutputWriter, StdioWriter, exec_statement};
 
-/// The interpreter.
+/// The main execution engine for Mermaid flowchart programs.
+///
+/// The interpreter manages the execution state including:
+/// - Node and edge lookup tables
+/// - Current execution position
+/// - Variable environment
+/// - I/O handlers
+///
+/// # Type Parameters
+///
+/// - `R` - Input reader type, implements [`InputReader`]
+/// - `W` - Output writer type, implements [`OutputWriter`]
+///
+/// # Construction
+///
+/// Use [`Interpreter::new`] for stdin/stdout, or [`Interpreter::with_io`]
+/// for custom I/O handlers.
+///
+/// # Execution
+///
+/// Call [`run`](Interpreter::run) to execute the program. Execution is
+/// synchronous and completes when reaching the `End` node or encountering
+/// an error.
+///
+/// # Examples
+///
+/// ```ignore
+/// use merx::parser;
+/// use merx::runtime::Interpreter;
+///
+/// let flowchart = parser::parse(source).unwrap();
+///
+/// // With default I/O (stdin/stdout)
+/// let mut interpreter = Interpreter::new(flowchart).unwrap();
+/// interpreter.run().unwrap();
+/// ```
 pub struct Interpreter<R: InputReader, W: OutputWriter> {
-    /// Map from node ID to node.
+    /// Lookup table mapping node IDs to their definitions.
+    ///
+    /// Built during construction from the flowchart's node list.
     nodes: HashMap<String, Node>,
-    /// Map from node ID to outgoing edges.
+
+    /// Lookup table mapping node IDs to their outgoing edges.
+    ///
+    /// Process nodes typically have one edge; condition nodes have two
+    /// (labeled Yes and No).
     outgoing_edges: HashMap<String, Vec<Edge>>,
-    /// Current node ID.
+
+    /// The ID of the node currently being executed.
+    ///
+    /// Starts at "Start" and updated as edges are followed.
     current_node_id: String,
-    /// Variable environment.
+
+    /// The variable environment storing all variable bindings.
     env: Environment,
-    /// Input reader.
+
+    /// The input source for `input` expressions.
     input_reader: R,
-    /// Output writer.
+
+    /// The output destination for print/error statements.
     output_writer: W,
 }
 
 impl Interpreter<StdinReader<io::BufReader<io::Stdin>>, StdioWriter> {
     /// Creates an interpreter with default I/O (stdin/stdout).
+    ///
+    /// This is the standard way to create an interpreter for command-line
+    /// execution.
+    ///
+    /// # Arguments
+    ///
+    /// * `flowchart` - The parsed flowchart to execute
+    ///
+    /// # Returns
+    ///
+    /// An interpreter ready to run, or an error if the flowchart is invalid.
+    ///
+    /// # Errors
+    ///
+    /// - [`RuntimeError::MissingStartNode`] - No `Start` node found
+    /// - [`RuntimeError::MissingEndNode`] - No `End` node found
+    /// - [`RuntimeError::MultipleStartNodes`] - More than one `Start` node
+    /// - [`RuntimeError::MultipleEndNodes`] - More than one `End` node
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use merx::parser;
+    /// use merx::runtime::Interpreter;
+    ///
+    /// let flowchart = parser::parse(source).unwrap();
+    /// let mut interpreter = Interpreter::new(flowchart).unwrap();
+    /// ```
     pub fn new(flowchart: Flowchart) -> Result<Self, RuntimeError> {
         Self::with_io(flowchart, StdinReader::new(), StdioWriter::new())
     }
 }
 
 impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
-    /// Creates an interpreter with custom I/O.
+    /// Creates an interpreter with custom I/O handlers.
+    ///
+    /// Use this for testing or when you need to capture/provide I/O
+    /// programmatically.
+    ///
+    /// # Arguments
+    ///
+    /// * `flowchart` - The parsed flowchart to execute
+    /// * `input_reader` - Custom input source
+    /// * `output_writer` - Custom output destination
+    ///
+    /// # Returns
+    ///
+    /// An interpreter ready to run, or an error if the flowchart is invalid.
+    ///
+    /// # Errors
+    ///
+    /// Same as [`Interpreter::new`]:
+    /// - [`RuntimeError::MissingStartNode`]
+    /// - [`RuntimeError::MissingEndNode`]
+    /// - [`RuntimeError::MultipleStartNodes`]
+    /// - [`RuntimeError::MultipleEndNodes`]
+    ///
+    /// # Implementation Details
+    ///
+    /// Construction performs these steps:
+    /// 1. Build node lookup table from flowchart nodes
+    /// 2. Count Start and End nodes for validation
+    /// 3. Build edge lookup table from flowchart edges
+    /// 4. Initialize empty environment
     pub fn with_io(
         flowchart: Flowchart,
         input_reader: R,
@@ -86,7 +245,44 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
         })
     }
 
-    /// Runs the program.
+    /// Executes the program from start to completion.
+    ///
+    /// This is the main execution loop. It processes nodes sequentially,
+    /// following edges until the `End` node is reached or an error occurs.
+    ///
+    /// # Execution Flow
+    ///
+    /// For each node:
+    /// 1. Look up the current node by ID
+    /// 2. Execute based on node type:
+    ///    - `Start`: Follow the outgoing edge
+    ///    - `End`: Return successfully
+    ///    - `Process`: Execute all statements, then follow edge
+    ///    - `Condition`: Evaluate condition, follow Yes/No edge
+    /// 3. Repeat until End or error
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` when execution reaches the `End` node normally.
+    ///
+    /// # Errors
+    ///
+    /// Any runtime error stops execution immediately:
+    ///
+    /// - Statement execution errors (type mismatch, undefined variable, etc.)
+    /// - Navigation errors (missing edge, missing node)
+    /// - I/O errors (input reading failed)
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let mut interpreter = Interpreter::new(flowchart).unwrap();
+    ///
+    /// match interpreter.run() {
+    ///     Ok(()) => println!("Program completed successfully"),
+    ///     Err(e) => eprintln!("Runtime error: {}", e),
+    /// }
+    /// ```
     pub fn run(&mut self) -> Result<(), RuntimeError> {
         loop {
             let node = self
@@ -132,7 +328,15 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
         }
     }
 
-    /// Moves to the next node (normal edge).
+    /// Follows an unconditional edge to the next node.
+    ///
+    /// Used by `Start` and `Process` nodes which have exactly one
+    /// outgoing edge (not labeled with Yes/No).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RuntimeError::NoOutgoingEdge`] if the current node
+    /// has no outgoing edges.
     fn move_to_next(&mut self) -> Result<(), RuntimeError> {
         let edges = self
             .outgoing_edges
@@ -152,7 +356,21 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
         Ok(())
     }
 
-    /// Moves to the next node based on the condition result.
+    /// Follows a conditional edge based on the condition result.
+    ///
+    /// Used by `Condition` nodes which have two outgoing edges:
+    /// one labeled `Yes` and one labeled `No`.
+    ///
+    /// # Arguments
+    ///
+    /// * `condition_result` - The boolean result of evaluating the condition
+    ///   - `true` follows the `Yes` edge
+    ///   - `false` follows the `No` edge
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RuntimeError::NoMatchingConditionEdge`] if no edge with
+    /// the required label exists.
     fn move_to_condition_branch(&mut self, condition_result: bool) -> Result<(), RuntimeError> {
         let edges = self
             .outgoing_edges
