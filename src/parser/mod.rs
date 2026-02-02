@@ -214,6 +214,13 @@ pub fn parse(input: &str) -> Result<Flowchart, ParseError> {
         }
     }
 
+    // Validate: End node must not have outgoing edges
+    for edge in &edges {
+        if edge.from == "End" {
+            return Err(ParseError::new("End node cannot have outgoing edges"));
+        }
+    }
+
     let nodes_vec: Vec<Node> = nodes.into_values().collect();
 
     Ok(Flowchart {
@@ -823,5 +830,33 @@ fn parse_binary_op(pair: Pair<Rule>) -> BinaryOp {
         "&&" => BinaryOp::And,
         "||" => BinaryOp::Or,
         _ => unreachable!(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_end_node_cannot_have_outgoing_edges() {
+        let input = r#"flowchart TD
+    Start --> End
+    End --> A[x = 1]
+    A --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.to_string(), "End node cannot have outgoing edges");
+    }
+
+    #[test]
+    fn test_valid_flowchart_ending_at_end() {
+        let input = r#"flowchart TD
+    Start --> A[x = 1]
+    A --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_ok());
     }
 }
