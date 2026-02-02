@@ -221,6 +221,26 @@ pub fn parse(input: &str) -> Result<Flowchart, ParseError> {
         }
     }
 
+    // Validate: Non-condition nodes must have at most one outgoing edge
+    let mut edge_counts: HashMap<String, usize> = HashMap::new();
+    for edge in &edges {
+        *edge_counts.entry(edge.from.clone()).or_insert(0) += 1;
+    }
+    for (node_id, count) in edge_counts {
+        if count > 1 {
+            // Condition nodes are allowed to have 2 edges (Yes and No)
+            let is_condition = nodes
+                .get(&node_id)
+                .is_some_and(|n| matches!(n, Node::Condition { .. }));
+            if !is_condition {
+                return Err(ParseError::new(format!(
+                    "Node '{}' has multiple outgoing edges (expected at most 1)",
+                    node_id
+                )));
+            }
+        }
+    }
+
     let nodes_vec: Vec<Node> = nodes.into_values().collect();
 
     Ok(Flowchart {
@@ -866,6 +886,53 @@ mod tests {
         let input = r#"flowchart TD
     Start --> A[x = 1]
     A --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_process_node_multiple_edges_error() {
+        let input = r#"flowchart TD
+    Start --> A[x = 1]
+    A --> B[y = 2]
+    A --> C[z = 3]
+    B --> End
+    C --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Node 'A' has multiple outgoing edges (expected at most 1)"
+        );
+    }
+
+    #[test]
+    fn test_start_node_multiple_edges_error() {
+        let input = r#"flowchart TD
+    Start --> A[x = 1]
+    Start --> B[y = 2]
+    A --> End
+    B --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Node 'Start' has multiple outgoing edges (expected at most 1)"
+        );
+    }
+
+    #[test]
+    fn test_condition_node_two_edges_allowed() {
+        let input = r#"flowchart TD
+    Start --> A{x > 0?}
+    A -->|Yes| B[println x]
+    A -->|No| End
+    B --> End
 "#;
         let result = parse(input);
         assert!(result.is_ok());
