@@ -868,6 +868,243 @@ fn parse_binary_op(pair: Pair<Rule>) -> BinaryOp {
 mod tests {
     use super::*;
 
+    // Helper function to parse an expression from a condition node
+    fn parse_condition_expr(expr_str: &str) -> Expr {
+        let input = format!(
+            r#"flowchart TD
+    Start --> A{{{}?}}
+    A -->|Yes| End
+    A -->|No| End
+"#,
+            expr_str
+        );
+        let flowchart = parse(&input).unwrap();
+        let condition_node = flowchart
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::Condition { .. }))
+            .unwrap();
+        match condition_node {
+            Node::Condition { condition, .. } => condition.clone(),
+            _ => unreachable!(),
+        }
+    }
+
+    // Helper function to parse an expression from an assignment statement
+    fn parse_assign_expr(expr_str: &str) -> Expr {
+        let input = format!(
+            r#"flowchart TD
+    Start --> A[result = {}]
+    A --> End
+"#,
+            expr_str
+        );
+        let flowchart = parse(&input).unwrap();
+        let process_node = flowchart
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::Process { .. }))
+            .unwrap();
+        match process_node {
+            Node::Process { statements, .. } => match &statements[0] {
+                Statement::Assign { value, .. } => value.clone(),
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    // ===== 1.2 Parser - Complex Expression Parsing Tests =====
+
+    #[test]
+    fn test_parse_nested_parentheses() {
+        // (1 + 2) * (3 - 4)
+        let expr = parse_assign_expr("(1 + 2) * (3 - 4)");
+
+        // Should be: Mul((1 + 2), (3 - 4))
+        match expr {
+            Expr::Binary { op, left, right } => {
+                assert!(matches!(op, BinaryOp::Mul));
+
+                // left: (1 + 2)
+                match *left {
+                    Expr::Binary { op, left, right } => {
+                        assert!(matches!(op, BinaryOp::Add));
+                        assert!(matches!(*left, Expr::IntLit { value: 1 }));
+                        assert!(matches!(*right, Expr::IntLit { value: 2 }));
+                    }
+                    _ => panic!("Expected Binary for left operand"),
+                }
+
+                // right: (3 - 4)
+                match *right {
+                    Expr::Binary { op, left, right } => {
+                        assert!(matches!(op, BinaryOp::Sub));
+                        assert!(matches!(*left, Expr::IntLit { value: 3 }));
+                        assert!(matches!(*right, Expr::IntLit { value: 4 }));
+                    }
+                    _ => panic!("Expected Binary for right operand"),
+                }
+            }
+            _ => panic!("Expected Binary expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_multiple_unary_operators_neg() {
+        // --x (double negation)
+        let expr = parse_assign_expr("--x");
+
+        // Should be: Neg(Neg(x))
+        match expr {
+            Expr::Unary { op, operand } => {
+                assert!(matches!(op, UnaryOp::Neg));
+                match *operand {
+                    Expr::Unary { op, operand } => {
+                        assert!(matches!(op, UnaryOp::Neg));
+                        match *operand {
+                            Expr::Variable { name } => assert_eq!(name, "x"),
+                            _ => panic!("Expected Variable"),
+                        }
+                    }
+                    _ => panic!("Expected Unary for inner operand"),
+                }
+            }
+            _ => panic!("Expected Unary expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_multiple_unary_operators_not() {
+        // !!b (double logical NOT)
+        let expr = parse_condition_expr("!!b");
+
+        // Should be: Not(Not(b))
+        match expr {
+            Expr::Unary { op, operand } => {
+                assert!(matches!(op, UnaryOp::Not));
+                match *operand {
+                    Expr::Unary { op, operand } => {
+                        assert!(matches!(op, UnaryOp::Not));
+                        match *operand {
+                            Expr::Variable { name } => assert_eq!(name, "b"),
+                            _ => panic!("Expected Variable"),
+                        }
+                    }
+                    _ => panic!("Expected Unary for inner operand"),
+                }
+            }
+            _ => panic!("Expected Unary expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_mixed_operators() {
+        // 1 + 2 * 3 - 4
+        // Should parse as: (1 + (2 * 3)) - 4 due to precedence
+        // Tree: Sub(Add(1, Mul(2, 3)), 4)
+        let expr = parse_assign_expr("1 + 2 * 3 - 4");
+
+        match expr {
+            Expr::Binary { op, left, right } => {
+                assert!(matches!(op, BinaryOp::Sub));
+
+                // right: 4
+                assert!(matches!(*right, Expr::IntLit { value: 4 }));
+
+                // left: 1 + (2 * 3)
+                match *left {
+                    Expr::Binary { op, left, right } => {
+                        assert!(matches!(op, BinaryOp::Add));
+                        assert!(matches!(*left, Expr::IntLit { value: 1 }));
+
+                        // right of Add: 2 * 3
+                        match *right {
+                            Expr::Binary { op, left, right } => {
+                                assert!(matches!(op, BinaryOp::Mul));
+                                assert!(matches!(*left, Expr::IntLit { value: 2 }));
+                                assert!(matches!(*right, Expr::IntLit { value: 3 }));
+                            }
+                            _ => panic!("Expected Mul"),
+                        }
+                    }
+                    _ => panic!("Expected Add"),
+                }
+            }
+            _ => panic!("Expected Binary expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_comparison_chain() {
+        // x > 1 && x < 10
+        // Should parse as: (x > 1) && (x < 10)
+        let expr = parse_condition_expr("x > 1 && x < 10");
+
+        match expr {
+            Expr::Binary { op, left, right } => {
+                assert!(matches!(op, BinaryOp::And));
+
+                // left: x > 1
+                match *left {
+                    Expr::Binary { op, left, right } => {
+                        assert!(matches!(op, BinaryOp::Gt));
+                        match *left {
+                            Expr::Variable { name } => assert_eq!(name, "x"),
+                            _ => panic!("Expected Variable x"),
+                        }
+                        assert!(matches!(*right, Expr::IntLit { value: 1 }));
+                    }
+                    _ => panic!("Expected Gt"),
+                }
+
+                // right: x < 10
+                match *right {
+                    Expr::Binary { op, left, right } => {
+                        assert!(matches!(op, BinaryOp::Lt));
+                        match *left {
+                            Expr::Variable { name } => assert_eq!(name, "x"),
+                            _ => panic!("Expected Variable x"),
+                        }
+                        assert!(matches!(*right, Expr::IntLit { value: 10 }));
+                    }
+                    _ => panic!("Expected Lt"),
+                }
+            }
+            _ => panic!("Expected Binary And expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_cast_in_expression() {
+        // (x as int) + 1
+        let expr = parse_assign_expr("(x as int) + 1");
+
+        match expr {
+            Expr::Binary { op, left, right } => {
+                assert!(matches!(op, BinaryOp::Add));
+
+                // left: x as int
+                match *left {
+                    Expr::Cast { expr, target_type } => {
+                        assert!(matches!(target_type, TypeName::Int));
+                        match *expr {
+                            Expr::Variable { name } => assert_eq!(name, "x"),
+                            _ => panic!("Expected Variable x"),
+                        }
+                    }
+                    _ => panic!("Expected Cast"),
+                }
+
+                // right: 1
+                assert!(matches!(*right, Expr::IntLit { value: 1 }));
+            }
+            _ => panic!("Expected Binary Add expression"),
+        }
+    }
+
+    // ===== End of 1.2 Tests =====
+
     #[test]
     fn test_end_node_cannot_have_outgoing_edges() {
         let input = r#"flowchart TD
