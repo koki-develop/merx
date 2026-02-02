@@ -1,0 +1,10 @@
+flowchart TD
+    Start --> A[a = true; b = false]
+    A --> B{a && b?}
+    B -->|Yes| C[println 'both true']
+    B -->|No| D{a || b?}
+    D -->|Yes| E[println 'at least one true']
+    D -->|No| F[println 'both false']
+    C --> End
+    E --> End
+    F --> End

@@ -1,0 +1,7 @@
+flowchart TD
+    Start --> A[i = 1; sum = 0]
+    A --> B{i <= 5?}
+    B -->|No| C[println sum]
+    C --> End
+    B -->|Yes| D[sum = sum + i; i = i + 1]
+    D --> B

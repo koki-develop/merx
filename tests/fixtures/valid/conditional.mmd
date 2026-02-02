@@ -1,0 +1,10 @@
+flowchart TD
+    Start --> A[x = 5]
+    A --> B{x > 10?}
+    B -->|Yes| C[println 'big']
+    B -->|No| D{x > 0?}
+    D -->|Yes| E[println 'small but positive']
+    D -->|No| F[println 'non-positive']
+    C --> End
+    E --> End
+    F --> End

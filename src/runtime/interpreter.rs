@@ -392,6 +392,18 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
             condition_result,
         })
     }
+
+    /// Consumes the interpreter and returns the output writer.
+    ///
+    /// This is useful for testing when you need to inspect the output
+    /// produced during execution.
+    ///
+    /// # Returns
+    ///
+    /// The output writer that was used during execution.
+    pub fn into_output_writer(self) -> W {
+        self.output_writer
+    }
 }
 
 #[cfg(test)]
