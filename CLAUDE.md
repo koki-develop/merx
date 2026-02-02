@@ -78,7 +78,7 @@ tests/
 - `Node`: Enum with variants `Start`, `End`, `Process { id, statements }`, `Condition { id, condition }`
 - `Edge`: Connects nodes with optional labels (`Yes`, `No`, or custom)
 - `Expr`: Expression tree supporting literals, variables, binary/unary ops, casts, and `input`
-- `Statement`: `Print`, `PrintNoNewline`, `Error`, or `Assign`
+- `Statement`: `Println`, `Print`, `Error`, or `Assign`
 
 All AST types derive `Serialize` for JSON output.
 

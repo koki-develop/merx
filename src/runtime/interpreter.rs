@@ -477,7 +477,7 @@ mod tests {
                 Node::Start,
                 Node::Process {
                     id: "A".to_string(),
-                    statements: vec![Statement::Print {
+                    statements: vec![Statement::Println {
                         expr: Expr::StrLit {
                             value: "hello".to_string(),
                         },
@@ -527,7 +527,7 @@ mod tests {
                 },
                 Node::Process {
                     id: "C".to_string(),
-                    statements: vec![Statement::Print {
+                    statements: vec![Statement::Println {
                         expr: Expr::StrLit {
                             value: "big".to_string(),
                         },
@@ -535,7 +535,7 @@ mod tests {
                 },
                 Node::Process {
                     id: "D".to_string(),
-                    statements: vec![Statement::Print {
+                    statements: vec![Statement::Println {
                         expr: Expr::StrLit {
                             value: "small".to_string(),
                         },
@@ -714,7 +714,7 @@ mod tests {
                 Node::Process {
                     id: "C".to_string(),
                     statements: vec![
-                        Statement::Print {
+                        Statement::Println {
                             expr: Expr::Variable {
                                 name: "n".to_string(),
                             },
@@ -957,7 +957,7 @@ mod tests {
                 },
                 Node::Process {
                     id: "C".to_string(),
-                    statements: vec![Statement::Print {
+                    statements: vec![Statement::Println {
                         expr: Expr::StrLit {
                             value: "big".to_string(),
                         },
@@ -965,7 +965,7 @@ mod tests {
                 },
                 Node::Process {
                     id: "D".to_string(),
-                    statements: vec![Statement::Print {
+                    statements: vec![Statement::Println {
                         expr: Expr::StrLit {
                             value: "medium".to_string(),
                         },
@@ -973,7 +973,7 @@ mod tests {
                 },
                 Node::Process {
                     id: "E".to_string(),
-                    statements: vec![Statement::Print {
+                    statements: vec![Statement::Println {
                         expr: Expr::StrLit {
                             value: "negative".to_string(),
                         },
@@ -1102,7 +1102,7 @@ mod tests {
                 },
                 Node::Process {
                     id: "P1".to_string(),
-                    statements: vec![Statement::Print {
+                    statements: vec![Statement::Println {
                         expr: Expr::StrLit {
                             value: "level 4".to_string(),
                         },
@@ -1110,7 +1110,7 @@ mod tests {
                 },
                 Node::Process {
                     id: "P2".to_string(),
-                    statements: vec![Statement::Print {
+                    statements: vec![Statement::Println {
                         expr: Expr::StrLit {
                             value: "level 3".to_string(),
                         },
@@ -1118,7 +1118,7 @@ mod tests {
                 },
                 Node::Process {
                     id: "P3".to_string(),
-                    statements: vec![Statement::Print {
+                    statements: vec![Statement::Println {
                         expr: Expr::StrLit {
                             value: "level 2".to_string(),
                         },
@@ -1126,7 +1126,7 @@ mod tests {
                 },
                 Node::Process {
                     id: "P4".to_string(),
-                    statements: vec![Statement::Print {
+                    statements: vec![Statement::Println {
                         expr: Expr::StrLit {
                             value: "level 1".to_string(),
                         },
@@ -1134,7 +1134,7 @@ mod tests {
                 },
                 Node::Process {
                     id: "P5".to_string(),
-                    statements: vec![Statement::Print {
+                    statements: vec![Statement::Println {
                         expr: Expr::StrLit {
                             value: "level 0".to_string(),
                         },

@@ -201,7 +201,7 @@ mod tests {
                 },
                 Node::Process {
                     id: "C".to_string(),
-                    statements: vec![Statement::Print {
+                    statements: vec![Statement::Println {
                         expr: Expr::Variable {
                             name: "x".to_string(),
                         },

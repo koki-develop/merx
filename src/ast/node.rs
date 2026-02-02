@@ -184,7 +184,7 @@ mod tests {
     fn test_node_serialize_process() {
         let node = Node::Process {
             id: "A".to_string(),
-            statements: vec![Statement::Print {
+            statements: vec![Statement::Println {
                 expr: Expr::StrLit {
                     value: "hello".to_string(),
                 },
@@ -196,7 +196,7 @@ mod tests {
         assert_eq!(json["id"], "A");
         assert!(json["statements"].is_array());
         assert_eq!(json["statements"].as_array().unwrap().len(), 1);
-        assert_eq!(json["statements"][0]["type"], "print");
+        assert_eq!(json["statements"][0]["type"], "println");
     }
 
     #[test]
@@ -208,7 +208,7 @@ mod tests {
                     variable: "x".to_string(),
                     value: Expr::IntLit { value: 5 },
                 },
-                Statement::Print {
+                Statement::Println {
                     expr: Expr::Variable {
                         name: "x".to_string(),
                     },
@@ -221,7 +221,7 @@ mod tests {
         assert_eq!(json["id"], "B");
         assert_eq!(json["statements"].as_array().unwrap().len(), 2);
         assert_eq!(json["statements"][0]["type"], "assign");
-        assert_eq!(json["statements"][1]["type"], "print");
+        assert_eq!(json["statements"][1]["type"], "println");
     }
 
     #[test]

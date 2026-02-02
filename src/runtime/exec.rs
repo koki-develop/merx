@@ -8,8 +8,8 @@
 //! | Statement | Syntax | Effect |
 //! |-----------|--------|--------|
 //! | `Assign` | `x = expr` | Sets variable to evaluated expression |
-//! | `Print` | `println expr` | Writes value to stdout with newline |
-//! | `PrintNoNewline` | `print expr` | Writes value to stdout without newline |
+//! | `Println` | `println expr` | Writes value to stdout with newline |
+//! | `Print` | `print expr` | Writes value to stdout without newline |
 //! | `Error` | `error expr` | Writes value to stderr |
 //!
 //! # Output Handling
@@ -139,7 +139,7 @@ impl OutputWriter for StdioWriter {
 /// use merx::ast::{Statement, Expr};
 /// use merx::runtime::{Environment, exec_statement, StdinReader, StdioWriter};
 ///
-/// let stmt = Statement::Print {
+/// let stmt = Statement::Println {
 ///     expr: Expr::StrLit { value: "Hello".to_string() },
 /// };
 ///
@@ -162,12 +162,12 @@ pub fn exec_statement<R: InputReader, W: OutputWriter>(
             env.set(variable.clone(), val);
             Ok(())
         }
-        Statement::Print { expr } => {
+        Statement::Println { expr } => {
             let val = eval_expr(expr, env, input_reader)?;
             output_writer.write_stdout(&val.to_string());
             Ok(())
         }
-        Statement::PrintNoNewline { expr } => {
+        Statement::Print { expr } => {
             let val = eval_expr(expr, env, input_reader)?;
             output_writer.write_stdout_no_newline(&val.to_string());
             Ok(())
@@ -267,7 +267,7 @@ mod tests {
         let mut input = MockInputReader::new(vec![]);
         let mut output = MockOutputWriter::new();
 
-        let stmt = Statement::Print {
+        let stmt = Statement::Println {
             expr: Expr::StrLit {
                 value: "hello".to_string(),
             },
@@ -285,7 +285,7 @@ mod tests {
         let mut input = MockInputReader::new(vec![]);
         let mut output = MockOutputWriter::new();
 
-        let stmt = Statement::Print {
+        let stmt = Statement::Println {
             expr: Expr::IntLit { value: 42 },
         };
 
@@ -300,7 +300,7 @@ mod tests {
         let mut input = MockInputReader::new(vec![]);
         let mut output = MockOutputWriter::new();
 
-        let stmt = Statement::PrintNoNewline {
+        let stmt = Statement::Print {
             expr: Expr::StrLit {
                 value: "hello".to_string(),
             },
@@ -380,7 +380,7 @@ mod tests {
                     }),
                 },
             },
-            Statement::Print {
+            Statement::Println {
                 expr: Expr::Variable {
                     name: "z".to_string(),
                 },
@@ -404,7 +404,7 @@ mod tests {
         let mut output = MockOutputWriter::new();
 
         // Try to print an undefined variable - should propagate error
-        let stmt = Statement::Print {
+        let stmt = Statement::Println {
             expr: Expr::Variable {
                 name: "undefined_var".to_string(),
             },
@@ -461,25 +461,25 @@ mod tests {
 
         // Execute multiple print statements and verify order is preserved
         let statements = vec![
-            Statement::Print {
+            Statement::Println {
                 expr: Expr::StrLit {
                     value: "first".to_string(),
                 },
             },
-            Statement::Print {
+            Statement::Println {
                 expr: Expr::StrLit {
                     value: "second".to_string(),
                 },
             },
-            Statement::Print {
+            Statement::Println {
                 expr: Expr::StrLit {
                     value: "third".to_string(),
                 },
             },
-            Statement::Print {
+            Statement::Println {
                 expr: Expr::IntLit { value: 4 },
             },
-            Statement::Print {
+            Statement::Println {
                 expr: Expr::BoolLit { value: true },
             },
         ];

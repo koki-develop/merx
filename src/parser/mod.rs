@@ -491,12 +491,12 @@ fn parse_statement(pair: Pair<Rule>) -> Result<Statement, ParseError> {
         Rule::println_stmt => {
             let expr_pair = inner.into_inner().next().unwrap();
             let expr = parse_expression(expr_pair)?;
-            Ok(Statement::Print { expr })
+            Ok(Statement::Println { expr })
         }
         Rule::print_stmt => {
             let expr_pair = inner.into_inner().next().unwrap();
             let expr = parse_expression(expr_pair)?;
-            Ok(Statement::PrintNoNewline { expr })
+            Ok(Statement::Print { expr })
         }
         Rule::error_stmt => {
             let expr_pair = inner.into_inner().next().unwrap();

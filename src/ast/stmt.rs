@@ -18,8 +18,8 @@ use super::Expr;
 /// | Variant | Mermaid Syntax | Description |
 /// |---------|----------------|-------------|
 /// | [`Assign`](Statement::Assign) | `x = expr` | Store value in variable |
-/// | [`Print`](Statement::Print) | `println expr` | Write to stdout with newline |
-/// | [`PrintNoNewline`](Statement::PrintNoNewline) | `print expr` | Write to stdout without newline |
+/// | [`Println`](Statement::Println) | `println expr` | Write to stdout with newline |
+/// | [`Print`](Statement::Print) | `print expr` | Write to stdout without newline |
 /// | [`Error`](Statement::Error) | `error expr` | Write to stderr and terminate |
 ///
 /// # Examples
@@ -36,6 +36,7 @@ use super::Expr;
 ///
 /// ```json
 /// { "type": "assign", "variable": "x", "value": {...} }
+/// { "type": "println", "expr": {...} }
 /// { "type": "print", "expr": {...} }
 /// { "type": "error", "message": {...} }
 /// ```
@@ -87,7 +88,7 @@ pub enum Statement {
     /// - Integers: Decimal representation (e.g., `42`)
     /// - Strings: The string value as-is (e.g., `Hello`)
     /// - Booleans: `true` or `false`
-    Print {
+    Println {
         /// The expression to evaluate and print.
         expr: Expr,
     },
@@ -106,8 +107,8 @@ pub enum Statement {
     ///
     /// # Output Format
     ///
-    /// Same as [`Print`](Statement::Print), but without the trailing newline.
-    PrintNoNewline {
+    /// Same as [`Println`](Statement::Println), but without the trailing newline.
+    Print {
         /// The expression to evaluate and print.
         expr: Expr,
     },
@@ -140,6 +141,36 @@ mod tests {
     use crate::ast::{BinaryOp, TypeName};
 
     #[test]
+    fn test_statement_serialize_println() {
+        let stmt = Statement::Println {
+            expr: Expr::StrLit {
+                value: "hello".to_string(),
+            },
+        };
+        let json = serde_json::to_value(&stmt).unwrap();
+
+        assert_eq!(json["type"], "println");
+        assert_eq!(json["expr"]["type"], "str_lit");
+        assert_eq!(json["expr"]["value"], "hello");
+    }
+
+    #[test]
+    fn test_statement_serialize_println_complex_expr() {
+        let stmt = Statement::Println {
+            expr: Expr::Binary {
+                op: BinaryOp::Add,
+                left: Box::new(Expr::IntLit { value: 1 }),
+                right: Box::new(Expr::IntLit { value: 2 }),
+            },
+        };
+        let json = serde_json::to_value(&stmt).unwrap();
+
+        assert_eq!(json["type"], "println");
+        assert_eq!(json["expr"]["type"], "binary");
+        assert_eq!(json["expr"]["op"], "add");
+    }
+
+    #[test]
     fn test_statement_serialize_print() {
         let stmt = Statement::Print {
             expr: Expr::StrLit {
@@ -149,36 +180,6 @@ mod tests {
         let json = serde_json::to_value(&stmt).unwrap();
 
         assert_eq!(json["type"], "print");
-        assert_eq!(json["expr"]["type"], "str_lit");
-        assert_eq!(json["expr"]["value"], "hello");
-    }
-
-    #[test]
-    fn test_statement_serialize_print_complex_expr() {
-        let stmt = Statement::Print {
-            expr: Expr::Binary {
-                op: BinaryOp::Add,
-                left: Box::new(Expr::IntLit { value: 1 }),
-                right: Box::new(Expr::IntLit { value: 2 }),
-            },
-        };
-        let json = serde_json::to_value(&stmt).unwrap();
-
-        assert_eq!(json["type"], "print");
-        assert_eq!(json["expr"]["type"], "binary");
-        assert_eq!(json["expr"]["op"], "add");
-    }
-
-    #[test]
-    fn test_statement_serialize_print_no_newline() {
-        let stmt = Statement::PrintNoNewline {
-            expr: Expr::StrLit {
-                value: "hello".to_string(),
-            },
-        };
-        let json = serde_json::to_value(&stmt).unwrap();
-
-        assert_eq!(json["type"], "print_no_newline");
         assert_eq!(json["expr"]["type"], "str_lit");
         assert_eq!(json["expr"]["value"], "hello");
     }
