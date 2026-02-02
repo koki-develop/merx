@@ -911,4 +911,143 @@ mod tests {
         let result = parse_and_eval("(1 + 2) * 3 - 4 / 2");
         assert_eq!(result, Value::Int(7));
     }
+
+    #[test]
+    fn test_int_max_value() {
+        let env = Environment::new();
+        let mut input = MockInputReader::new(vec![]);
+        let expr = Expr::IntLit { value: i64::MAX };
+        let result = eval_expr(&expr, &env, &mut input).unwrap();
+        assert_eq!(result, Value::Int(i64::MAX));
+        assert_eq!(result, Value::Int(9223372036854775807));
+    }
+
+    #[test]
+    fn test_int_min_value() {
+        let env = Environment::new();
+        let mut input = MockInputReader::new(vec![]);
+        let expr = Expr::IntLit { value: i64::MIN };
+        let result = eval_expr(&expr, &env, &mut input).unwrap();
+        assert_eq!(result, Value::Int(i64::MIN));
+        assert_eq!(result, Value::Int(-9223372036854775808));
+    }
+
+    #[test]
+    fn test_int_overflow_add() {
+        // i64::MAX + 1 should wrap to i64::MIN (wrapping_add behavior)
+        let env = Environment::new();
+        let mut input = MockInputReader::new(vec![]);
+        let expr = Expr::Binary {
+            op: BinaryOp::Add,
+            left: Box::new(Expr::IntLit { value: i64::MAX }),
+            right: Box::new(Expr::IntLit { value: 1 }),
+        };
+        let result = eval_expr(&expr, &env, &mut input).unwrap();
+        assert_eq!(result, Value::Int(i64::MIN));
+    }
+
+    #[test]
+    fn test_int_overflow_mul() {
+        // i64::MAX * 2 should wrap (wrapping_mul behavior)
+        // i64::MAX = 9223372036854775807
+        // i64::MAX * 2 wraps to -2
+        let env = Environment::new();
+        let mut input = MockInputReader::new(vec![]);
+        let expr = Expr::Binary {
+            op: BinaryOp::Mul,
+            left: Box::new(Expr::IntLit { value: i64::MAX }),
+            right: Box::new(Expr::IntLit { value: 2 }),
+        };
+        let result = eval_expr(&expr, &env, &mut input).unwrap();
+        assert_eq!(result, Value::Int(i64::MAX.wrapping_mul(2)));
+        assert_eq!(result, Value::Int(-2));
+    }
+
+    #[test]
+    fn test_negative_mod() {
+        // -10 % 3 should be -1 (Rust's remainder semantics)
+        let env = Environment::new();
+        let mut input = MockInputReader::new(vec![]);
+        let expr = Expr::Binary {
+            op: BinaryOp::Mod,
+            left: Box::new(Expr::IntLit { value: -10 }),
+            right: Box::new(Expr::IntLit { value: 3 }),
+        };
+        let result = eval_expr(&expr, &env, &mut input).unwrap();
+        assert_eq!(result, Value::Int(-1));
+    }
+
+    #[test]
+    fn test_cast_max_int_string() {
+        // "9223372036854775807" as int should succeed with i64::MAX
+        let env = Environment::new();
+        let mut input = MockInputReader::new(vec![]);
+        let expr = Expr::Cast {
+            expr: Box::new(Expr::StrLit {
+                value: "9223372036854775807".to_string(),
+            }),
+            target_type: TypeName::Int,
+        };
+        let result = eval_expr(&expr, &env, &mut input).unwrap();
+        assert_eq!(result, Value::Int(i64::MAX));
+    }
+
+    #[test]
+    fn test_cast_overflow_string() {
+        // "9223372036854775808" as int should fail (overflow)
+        let env = Environment::new();
+        let mut input = MockInputReader::new(vec![]);
+        let expr = Expr::Cast {
+            expr: Box::new(Expr::StrLit {
+                value: "9223372036854775808".to_string(),
+            }),
+            target_type: TypeName::Int,
+        };
+        let result = eval_expr(&expr, &env, &mut input);
+        assert!(matches!(
+            result,
+            Err(RuntimeError::CastError {
+                from_type: "str",
+                to_type: "int",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn test_cast_negative_string() {
+        // "-42" as int should succeed with -42
+        let env = Environment::new();
+        let mut input = MockInputReader::new(vec![]);
+        let expr = Expr::Cast {
+            expr: Box::new(Expr::StrLit {
+                value: "-42".to_string(),
+            }),
+            target_type: TypeName::Int,
+        };
+        let result = eval_expr(&expr, &env, &mut input).unwrap();
+        assert_eq!(result, Value::Int(-42));
+    }
+
+    #[test]
+    fn test_cast_empty_string() {
+        // "" as int should fail
+        let env = Environment::new();
+        let mut input = MockInputReader::new(vec![]);
+        let expr = Expr::Cast {
+            expr: Box::new(Expr::StrLit {
+                value: "".to_string(),
+            }),
+            target_type: TypeName::Int,
+        };
+        let result = eval_expr(&expr, &env, &mut input);
+        assert!(matches!(
+            result,
+            Err(RuntimeError::CastError {
+                from_type: "str",
+                to_type: "int",
+                ..
+            })
+        ));
+    }
 }
