@@ -35,7 +35,7 @@
 //! - **Nodes**: `Start`, `End`, process nodes `id[statements]`, condition nodes `id{expr?}`
 //! - **Edges**: `-->` with optional labels `|Yes|`, `|No|`, or custom text
 //! - **Expressions**: Arithmetic, comparison, logical operators with proper precedence
-//! - **Statements**: `print`, `error`, and assignment (`=`)
+//! - **Statements**: `println`, `error`, and assignment (`=`)
 //!
 //! # See Also
 //!
@@ -106,7 +106,7 @@ struct MermaidParser;
 /// // Flowchart with condition
 /// let input = r#"flowchart TD
 ///     Start --> A{x > 0?}
-///     A -->|Yes| B[print x]
+///     A -->|Yes| B[println x]
 ///     A -->|No| End
 ///     B --> End
 /// "#;
@@ -342,7 +342,7 @@ fn parse_edge_label(pair: Pair<Rule>) -> EdgeLabel {
 /// Parses a node reference, which may be a full definition or a bare identifier.
 ///
 /// In Mermaid flowcharts, nodes can be defined inline with their content
-/// (e.g., `A[print x]`) or referenced by just their ID (e.g., `A`).
+/// (e.g., `A[println x]`) or referenced by just their ID (e.g., `A`).
 ///
 /// # Arguments
 ///
@@ -448,7 +448,7 @@ fn parse_statements(pair: Pair<Rule>) -> Result<Vec<Statement>, ParseError> {
 /// Parses a single statement.
 ///
 /// Supports three statement types:
-/// - `print expr`: Outputs the expression value to stdout
+/// - `println expr`: Outputs the expression value to stdout
 /// - `error expr`: Outputs the expression value to stderr and terminates
 /// - `variable = expr`: Assigns the expression value to a variable
 ///

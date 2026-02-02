@@ -18,15 +18,15 @@ use super::Expr;
 /// | Variant | Mermaid Syntax | Description |
 /// |---------|----------------|-------------|
 /// | [`Assign`](Statement::Assign) | `x = expr` | Store value in variable |
-/// | [`Print`](Statement::Print) | `print expr` | Write to stdout |
+/// | [`Print`](Statement::Print) | `println expr` | Write to stdout |
 /// | [`Error`](Statement::Error) | `error expr` | Write to stderr and terminate |
 ///
 /// # Examples
 ///
 /// ```text
-/// A[x = 5; print x]           // Assign then print
-/// B[name = input; print name] // Read input and display
-/// C[error 'Invalid input']    // Signal an error
+/// A[x = 5; println x]           // Assign then print
+/// B[name = input; println name] // Read input and display
+/// C[error 'Invalid input']      // Signal an error
 /// ```
 ///
 /// # Serialization
@@ -76,9 +76,9 @@ pub enum Statement {
     /// # Mermaid Syntax
     ///
     /// ```text
-    /// print 'Hello, World!'
-    /// print x
-    /// print a + b
+    /// println 'Hello, World!'
+    /// println x
+    /// println a + b
     /// ```
     ///
     /// # Output Format

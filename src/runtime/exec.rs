@@ -8,14 +8,14 @@
 //! | Statement | Syntax | Effect |
 //! |-----------|--------|--------|
 //! | `Assign` | `x = expr` | Sets variable to evaluated expression |
-//! | `Print` | `print expr` | Writes value to stdout |
+//! | `Print` | `println expr` | Writes value to stdout |
 //! | `Error` | `error expr` | Writes value to stderr |
 //!
 //! # Output Handling
 //!
 //! The executor uses the [`OutputWriter`] trait for output operations,
 //! allowing dependency injection for testing. Output is line-based:
-//! each `print` or `error` statement produces one line.
+//! each `println` or `error` statement produces one line.
 
 use crate::ast::Statement;
 
