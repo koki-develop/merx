@@ -30,25 +30,33 @@ cargo clippy
 
 ## Architecture
 
-The project follows a traditional interpreter architecture with parsing and AST construction. Execution is not yet implemented.
+The project follows a traditional interpreter architecture: parsing, AST construction, and execution.
 
 ### Core Components
 
 ```
 src/
 ├── main.rs          # CLI entry point (clap-based)
-├── lib.rs           # Library exports (ast, parser modules)
+├── lib.rs           # Library exports (ast, parser, runtime modules)
 ├── grammar.pest     # PEG grammar for Mermaid flowchart syntax
 ├── parser/
 │   ├── mod.rs       # Parser implementation using pest
 │   └── error.rs     # ParseError type
-└── ast/
-    ├── mod.rs       # Re-exports all AST types
-    ├── flowchart.rs # Flowchart, Direction
-    ├── node.rs      # Node enum (Start, End, Process, Condition)
-    ├── edge.rs      # Edge, EdgeLabel
-    ├── expr.rs      # Expr, BinaryOp, UnaryOp, TypeName
-    └── stmt.rs      # Statement enum
+├── ast/
+│   ├── mod.rs       # Re-exports all AST types
+│   ├── flowchart.rs # Flowchart, Direction
+│   ├── node.rs      # Node enum (Start, End, Process, Condition)
+│   ├── edge.rs      # Edge, EdgeLabel
+│   ├── expr.rs      # Expr, BinaryOp, UnaryOp, TypeName
+│   └── stmt.rs      # Statement enum
+└── runtime/
+    ├── mod.rs       # Re-exports runtime types
+    ├── value.rs     # Value enum (Int, Str, Bool)
+    ├── error.rs     # RuntimeError type
+    ├── env.rs       # Environment (variable storage)
+    ├── eval.rs      # Expression evaluation
+    ├── exec.rs      # Statement execution
+    └── interpreter.rs # Interpreter main loop
 ```
 
 ### Parser
@@ -66,5 +74,13 @@ src/
 - `Expr`: Expression tree supporting literals, variables, binary/unary ops, casts, and `input`
 - `Statement`: `Print`, `Error`, or `Assign`
 
-All AST types derive `Serialize` for JSON output (currently the only output format).
+All AST types derive `Serialize` for JSON output.
+
+### Runtime
+
+- Entry point: `runtime::Interpreter::new(Flowchart) -> Result<Interpreter, RuntimeError>`
+- `Interpreter::run()` executes the flowchart from Start to End
+- `Value`: Runtime values (`Int(i64)`, `Str(String)`, `Bool(bool)`)
+- `Environment`: HashMap-based variable storage
+- `InputReader` / `OutputWriter` traits for testability (dependency injection)
 
