@@ -119,3 +119,37 @@ impl EdgeLabel {
         matches!(self, EdgeLabel::Yes | EdgeLabel::No)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_edge_label_is_yes_or_no_yes() {
+        assert!(EdgeLabel::Yes.is_yes_or_no());
+    }
+
+    #[test]
+    fn test_edge_label_is_yes_or_no_no() {
+        assert!(EdgeLabel::No.is_yes_or_no());
+    }
+
+    #[test]
+    fn test_edge_label_is_yes_or_no_custom() {
+        assert!(!EdgeLabel::Custom("maybe".to_string()).is_yes_or_no());
+        assert!(!EdgeLabel::Custom("".to_string()).is_yes_or_no());
+        assert!(!EdgeLabel::Custom("YES".to_string()).is_yes_or_no());
+        assert!(!EdgeLabel::Custom("yes".to_string()).is_yes_or_no());
+    }
+
+    #[test]
+    fn test_edge_label_is_yes_or_no_none() {
+        let label: Option<EdgeLabel> = None;
+        assert!(label.is_none());
+
+        // When label is None, is_yes_or_no cannot be called directly.
+        // This test verifies the pattern used in the codebase.
+        let is_yes_or_no = label.as_ref().is_some_and(|l| l.is_yes_or_no());
+        assert!(!is_yes_or_no);
+    }
+}
