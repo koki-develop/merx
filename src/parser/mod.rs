@@ -66,6 +66,36 @@ use crate::ast::{
 #[grammar = "grammar.pest"]
 struct MermaidParser;
 
+fn insert_node(nodes: &mut HashMap<String, Node>, node: Node) -> Result<(), ParseError> {
+    let node_id = node.id().to_string();
+    match nodes.get(&node_id) {
+        Some(existing) => match (existing, &node) {
+            // A bare Start/End reference (no label) does not conflict with any existing Start/End.
+            (Node::Start { .. }, Node::Start { label: None })
+            | (Node::End { .. }, Node::End { label: None }) => Ok(()),
+
+            // A labeled Start/End upgrades an existing bare reference.
+            (Node::Start { label: None }, Node::Start { label: Some(_) })
+            | (Node::End { label: None }, Node::End { label: Some(_) }) => {
+                nodes.insert(node_id, node);
+                Ok(())
+            }
+
+            // Identical redefinition is allowed.
+            (existing, new) if existing == new => Ok(()),
+
+            _ => Err(ParseError::new(format!(
+                "Node '{}' is defined multiple times",
+                node_id
+            ))),
+        },
+        None => {
+            nodes.insert(node_id, node);
+            Ok(())
+        }
+    }
+}
+
 /// Parses Mermaid flowchart source text into an AST.
 ///
 /// This is the main entry point for parsing Mermaid flowchart programs.
@@ -142,10 +172,10 @@ pub fn parse(input: &str) -> Result<Flowchart, ParseError> {
                         let parsed = parse_line(inner)?;
 
                         if let Some(node) = parsed.from_node {
-                            nodes.entry(node.id().to_string()).or_insert(node);
+                            insert_node(&mut nodes, node)?;
                         }
                         if let Some(node) = parsed.to_node {
-                            nodes.entry(node.id().to_string()).or_insert(node);
+                            insert_node(&mut nodes, node)?;
                         }
 
                         edges.push(Edge {
@@ -1332,6 +1362,117 @@ mod tests {
 "#;
         let result = parse(input);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_duplicate_process_node_label() {
+        let input = r#"flowchart TD
+    Start --> A[print 'hello']
+    A[print 'world'] --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.to_string(), "Node 'A' is defined multiple times");
+    }
+
+    #[test]
+    fn test_duplicate_condition_node_label() {
+        let input = r#"flowchart TD
+    Start --> A{x > 0?}
+    A{x < 0?} -->|Yes| B[println x]
+    A -->|No| End
+    B --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.to_string(), "Node 'A' is defined multiple times");
+    }
+
+    #[test]
+    fn test_duplicate_start_stadium_label() {
+        let input = r#"flowchart TD
+    Start(["Begin"]) --> A[x = 1]
+    Start(["Other"]) --> A
+    A --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.to_string(), "Node 'Start' is defined multiple times");
+    }
+
+    #[test]
+    fn test_duplicate_end_stadium_label() {
+        let input = r#"flowchart TD
+    Start --> A[x = 1]
+    A --> End(["Done"])
+    Start --> End(["Other"])
+"#;
+        let result = parse(input);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.to_string(), "Node 'End' is defined multiple times");
+    }
+
+    #[test]
+    fn test_same_node_referenced_without_label_is_ok() {
+        let input = r#"flowchart TD
+    Start --> A{x > 0?}
+    A -->|Yes| End
+    A -->|No| B[x = 1]
+    B --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_start_label_then_bare_reference_is_ok() {
+        let input = r#"flowchart TD
+    Start(["Begin"]) --> A{x > 0?}
+    A -->|Yes| End
+    A -->|No| B[x = 1]
+    B --> Start
+"#;
+        let result = parse(input);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_bare_end_then_labeled_end_is_ok() {
+        let input = r#"flowchart TD
+    Start --> A{x > 0?}
+    A -->|Yes| End
+    A -->|No| B[x = 1]
+    B --> End(["Done"])
+"#;
+        let result = parse(input);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_identical_process_node_redefinition_is_ok() {
+        let input = r#"flowchart TD
+    Start --> A[x = 1]
+    A[x = 1] --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_cross_type_duplicate_process_and_condition() {
+        let input = r#"flowchart TD
+    Start --> A[x = 1]
+    A{x > 0?} -->|Yes| End
+    A -->|No| End
+"#;
+        let result = parse(input);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.to_string(), "Node 'A' is defined multiple times");
     }
 
     #[test]

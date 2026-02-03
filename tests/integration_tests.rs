@@ -406,6 +406,22 @@ mod invalid_flowcharts {
             err
         );
     }
+
+    #[test]
+    fn test_duplicate_node_label() {
+        let source = include_str!("fixtures/invalid/duplicate_node_label.mmd");
+        let result = parser::parse(source);
+        assert!(
+            result.is_err(),
+            "Should fail when a node is defined multiple times"
+        );
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("defined multiple times"),
+            "Error should mention duplicate node definition: {}",
+            err
+        );
+    }
 }
 
 // =============================================================================
