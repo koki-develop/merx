@@ -15,8 +15,16 @@ direction = { "TD" | "TB" | "LR" | "RL" | "BT" }
 line = { edge_def ~ NEWLINE* }
 
 // Edge definition
-edge_def = { node_ref ~ arrow ~ edge_label? ~ node_ref }
+edge_def = { node_ref ~ (arrow_with_inline_label | arrow) ~ edge_label? ~ node_ref }
 arrow = @{ "--" ~ "-"* ~ ">" }
+// NOTE: arrow_with_inline_label is tried before arrow via ordered choice.
+// For plain arrows (e.g. "-->"), arrow_prefix matches "--" but label_text
+// fails on ">", causing a backtrack to the arrow alternative.
+// label_text deliberately excludes "-" so the parser can detect the boundary
+// between label content and arrow_suffix. Adding "-" would break this.
+arrow_with_inline_label = { arrow_prefix ~ label_text ~ arrow_suffix }
+arrow_prefix = @{ "--" ~ "-"* }
+arrow_suffix = @{ "--" ~ "-"* ~ ">" }
 edge_label = { "|" ~ label_text ~ "|" }
 label_text = @{ (ASCII_ALPHANUMERIC | "_" | " " | "\t")+ }
 

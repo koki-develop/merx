@@ -323,6 +323,62 @@ mod valid_flowcharts {
         let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
         assert_eq!(stdout, vec!["value: 42"]);
     }
+
+    #[test]
+    fn test_inline_label_conditional() {
+        let source = r#"flowchart TD
+    Start --> A[x = 5]
+    A --> B{x > 3?}
+    B --Yes--> C[println 'big']
+    B --No--> D[println 'small']
+    C --> End
+    D --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["big"]);
+    }
+
+    #[test]
+    fn test_inline_label_with_long_arrow() {
+        let source = r#"flowchart TD
+    Start --> A[x = 1]
+    A --> B{x > 0?}
+    B ----Yes----> C[println 'positive']
+    B ----No----> D[println 'non_positive']
+    C --> End
+    D --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["positive"]);
+    }
+
+    #[test]
+    fn test_inline_label_with_spaces() {
+        let source = r#"flowchart TD
+    Start --> A[x = 0]
+    A --> B{x > 0?}
+    B -- Yes --> C[println 'positive']
+    B -- No --> D[println 'non_positive']
+    C --> End
+    D --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["non_positive"]);
+    }
+
+    #[test]
+    fn test_inline_and_pipe_label_mixed() {
+        let source = r#"flowchart TD
+    Start --> A[x = 5]
+    A --> B{x > 3?}
+    B --Yes--> C[println 'big']
+    B -->|No| D[println 'small']
+    C --> End
+    D --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["big"]);
+    }
 }
 
 // =============================================================================
@@ -504,6 +560,17 @@ mod invalid_flowcharts {
             "Error should mention undefined node: {}",
             err
         );
+    }
+
+    #[test]
+    fn test_dual_edge_label() {
+        let source = include_str!("fixtures/invalid/dual_edge_label.mmd");
+        let result = parser::parse(source);
+        assert!(
+            result.is_err(),
+            "Should fail when both inline and pipe labels are used"
+        );
+        assert!(matches!(result.unwrap_err(), AnalysisError::Syntax(_)));
     }
 }
 

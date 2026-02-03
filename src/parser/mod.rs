@@ -390,17 +390,26 @@ fn parse_line(pair: Pair<Rule>) -> Result<ParsedLine, SyntaxError> {
         .ok_or_else(|| SyntaxError::new("internal: expected from_pair in edge_def"))?;
     let (from_id, from_node) = parse_node_ref(from_pair)?;
 
-    // Skip the arrow token
-    inner
+    let arrow_pair = inner
         .next()
         .ok_or_else(|| SyntaxError::new("internal: expected arrow in edge_def"))?;
 
     let mut label = None;
+    if arrow_pair.as_rule() == Rule::arrow_with_inline_label {
+        label = Some(parse_inline_label(arrow_pair)?);
+    }
+
     let mut to_pair = inner
         .next()
         .ok_or_else(|| SyntaxError::new("internal: expected to_pair in edge_def"))?;
 
     if to_pair.as_rule() == Rule::edge_label {
+        if label.is_some() {
+            return Err(SyntaxError::new(format!(
+                "edge from '{}' cannot have both an inline label (--text-->) and a pipe label (|text|)",
+                from_id
+            )));
+        }
         label = Some(parse_edge_label(to_pair)?);
         to_pair = inner
             .next()
@@ -440,11 +449,27 @@ fn parse_edge_label(pair: Pair<Rule>) -> Result<EdgeLabel, SyntaxError> {
         .ok_or_else(|| SyntaxError::new("internal: expected label_text in edge_label"))?
         .as_str()
         .trim();
-    Ok(match label_text.to_lowercase().as_str() {
+    Ok(label_text_to_edge_label(label_text))
+}
+
+fn parse_inline_label(pair: Pair<Rule>) -> Result<EdgeLabel, SyntaxError> {
+    let label_text = pair
+        .into_inner()
+        .find(|p| p.as_rule() == Rule::label_text)
+        .ok_or_else(|| {
+            SyntaxError::new("internal: expected label_text in arrow_with_inline_label")
+        })?
+        .as_str()
+        .trim();
+    Ok(label_text_to_edge_label(label_text))
+}
+
+fn label_text_to_edge_label(text: &str) -> EdgeLabel {
+    match text.to_lowercase().as_str() {
         "yes" => EdgeLabel::Yes,
         "no" => EdgeLabel::No,
-        _ => EdgeLabel::Custom(label_text.to_string()),
-    })
+        _ => EdgeLabel::Custom(text.to_string()),
+    }
 }
 
 /// Parses a node reference, which may be a full definition or a bare identifier.
@@ -2353,5 +2378,168 @@ flowchart TD
             edge.unwrap().label,
             Some(EdgeLabel::Custom("Hello World".to_string()))
         );
+    }
+
+    #[test]
+    fn test_parse_inline_label_basic() {
+        let input = r#"flowchart TD
+    Start --> A{x > 0?}
+    A --Yes--> B[println x]
+    A --No--> End
+    B --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_ok(), "Should parse inline label: {:?}", result);
+        let flowchart = result.unwrap();
+        let yes_edge = flowchart
+            .edges
+            .iter()
+            .find(|e| e.from == "A" && e.to == "B");
+        assert!(matches!(yes_edge.unwrap().label, Some(EdgeLabel::Yes)));
+        let no_edge = flowchart
+            .edges
+            .iter()
+            .find(|e| e.from == "A" && e.to == "End");
+        assert!(matches!(no_edge.unwrap().label, Some(EdgeLabel::No)));
+    }
+
+    #[test]
+    fn test_parse_inline_label_with_spaces() {
+        let input = r#"flowchart TD
+    Start --> A{x > 0?}
+    A -- Yes --> B[println x]
+    A -- No --> End
+    B --> End
+"#;
+        let result = parse(input);
+        assert!(
+            result.is_ok(),
+            "Should parse inline label with spaces: {:?}",
+            result
+        );
+        let flowchart = result.unwrap();
+        let yes_edge = flowchart
+            .edges
+            .iter()
+            .find(|e| e.from == "A" && e.to == "B");
+        assert!(matches!(yes_edge.unwrap().label, Some(EdgeLabel::Yes)));
+        let no_edge = flowchart
+            .edges
+            .iter()
+            .find(|e| e.from == "A" && e.to == "End");
+        assert!(matches!(no_edge.unwrap().label, Some(EdgeLabel::No)));
+    }
+
+    #[test]
+    fn test_parse_inline_label_with_interior_spaces() {
+        let input = r#"flowchart TD
+    Start --> A[println 'hello']
+    A -- Hello World --> End
+"#;
+        let result = parse(input);
+        assert!(
+            result.is_ok(),
+            "Should parse inline label with interior spaces: {:?}",
+            result
+        );
+        let flowchart = result.unwrap();
+        let edge = flowchart
+            .edges
+            .iter()
+            .find(|e| e.from == "A" && e.to == "End");
+        assert_eq!(
+            edge.unwrap().label,
+            Some(EdgeLabel::Custom("Hello World".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_inline_label_long_arrow() {
+        let input = r#"flowchart TD
+    Start --> A{x > 0?}
+    A ----Yes----> B[println x]
+    A ----No----> End
+    B --> End
+"#;
+        let result = parse(input);
+        assert!(
+            result.is_ok(),
+            "Should parse inline label with long arrows: {:?}",
+            result
+        );
+        let flowchart = result.unwrap();
+        let yes_edge = flowchart
+            .edges
+            .iter()
+            .find(|e| e.from == "A" && e.to == "B");
+        assert!(matches!(yes_edge.unwrap().label, Some(EdgeLabel::Yes)));
+        let no_edge = flowchart
+            .edges
+            .iter()
+            .find(|e| e.from == "A" && e.to == "End");
+        assert!(matches!(no_edge.unwrap().label, Some(EdgeLabel::No)));
+    }
+
+    #[test]
+    fn test_parse_inline_label_custom() {
+        let input = r#"flowchart TD
+    Start --> A[println 'hello']
+    A --custom_label--> End
+"#;
+        let result = parse(input);
+        assert!(
+            result.is_ok(),
+            "Should parse custom inline label: {:?}",
+            result
+        );
+        let flowchart = result.unwrap();
+        let edge = flowchart
+            .edges
+            .iter()
+            .find(|e| e.from == "A" && e.to == "End");
+        assert_eq!(
+            edge.unwrap().label,
+            Some(EdgeLabel::Custom("custom_label".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_inline_label_with_pipe_label_error() {
+        let input = r#"flowchart TD
+    Start --> A{x > 0?}
+    A --Yes--> |Yes| B[println x]
+    A -->|No| End
+    B --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_err(), "Should reject dual labels");
+        assert!(matches!(result.unwrap_err(), AnalysisError::Syntax(_)));
+    }
+
+    #[test]
+    fn test_parse_inline_label_case_insensitive() {
+        let input = r#"flowchart TD
+    Start --> A{x > 0?}
+    A --yes--> B[println x]
+    A --NO--> End
+    B --> End
+"#;
+        let result = parse(input);
+        assert!(
+            result.is_ok(),
+            "Should parse case-insensitive inline labels: {:?}",
+            result
+        );
+        let flowchart = result.unwrap();
+        let yes_edge = flowchart
+            .edges
+            .iter()
+            .find(|e| e.from == "A" && e.to == "B");
+        assert!(matches!(yes_edge.unwrap().label, Some(EdgeLabel::Yes)));
+        let no_edge = flowchart
+            .edges
+            .iter()
+            .find(|e| e.from == "A" && e.to == "End");
+        assert!(matches!(no_edge.unwrap().label, Some(EdgeLabel::No)));
     }
 }
