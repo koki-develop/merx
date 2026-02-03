@@ -390,6 +390,11 @@ fn parse_line(pair: Pair<Rule>) -> Result<ParsedLine, SyntaxError> {
         .ok_or_else(|| SyntaxError::new("internal: expected from_pair in edge_def"))?;
     let (from_id, from_node) = parse_node_ref(from_pair)?;
 
+    // Skip the arrow token
+    inner
+        .next()
+        .ok_or_else(|| SyntaxError::new("internal: expected arrow in edge_def"))?;
+
     let mut label = None;
     let mut to_pair = inner
         .next()
@@ -2201,6 +2206,41 @@ flowchart TD
             "Incomplete hex escape should cause syntax error"
         );
         assert!(matches!(result.unwrap_err(), AnalysisError::Syntax(_)));
+    }
+
+    #[test]
+    fn test_parse_long_arrow() {
+        let input = r#"flowchart TD
+    Start ---> A[x = 1]
+    A ----------------> End
+"#;
+        let result = parse(input);
+        assert!(result.is_ok(), "Should parse arrows of any length");
+        let flowchart = result.unwrap();
+        assert_eq!(flowchart.edges.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_single_dash_arrow_fails() {
+        let input = r#"flowchart TD
+    Start -> A[x = 1]
+    A -> End
+"#;
+        let result = parse(input);
+        assert!(result.is_err(), "Single-dash arrow should be rejected");
+        assert!(matches!(result.unwrap_err(), AnalysisError::Syntax(_)));
+    }
+
+    #[test]
+    fn test_parse_long_arrow_with_label() {
+        let input = r#"flowchart TD
+    Start --> A{x > 0?}
+    A --->|Yes| B[println x]
+    A ---->|No| End
+    B --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_ok(), "Should parse long arrows with labels");
     }
 
     #[test]

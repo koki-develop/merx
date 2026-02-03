@@ -15,7 +15,8 @@ direction = { "TD" | "TB" | "LR" | "RL" | "BT" }
 line = { edge_def ~ NEWLINE* }
 
 // Edge definition
-edge_def = { node_ref ~ "-->" ~ edge_label? ~ node_ref }
+edge_def = { node_ref ~ arrow ~ edge_label? ~ node_ref }
+arrow = @{ "--" ~ "-"* ~ ">" }
 edge_label = { "|" ~ label_text ~ "|" }
 label_text = @{ (ASCII_ALPHANUMERIC | "_")+ }
 
