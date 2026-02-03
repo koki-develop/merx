@@ -34,8 +34,8 @@ jobs:
           token: ${{ github.token }}
           release-type: rust
 
-  release:
-    name: Release (${{ matrix.target }})
+  build:
+    name: Build (${{ matrix.target }})
     needs: release-please
     if: needs.release-please.outputs.should-release == 'true'
     strategy:
@@ -60,7 +60,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     permissions:
-      contents: write # for uploading release assets
+      contents: read
     env:
       TARGET: ${{ matrix.target }}
       USE_CROSS: ${{ matrix.use-cross }}
@@ -136,10 +136,38 @@ jobs:
           "$hash  $env:ARCHIVE_NAME" | Out-File -Encoding ASCII "$env:ARCHIVE_NAME.sha256"
 
       # ============================================================
-      # Upload
+      # Upload artifacts
       # ============================================================
 
+      - name: Upload artifacts
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: artifacts-${{ matrix.target }}
+          path: |
+            merx-*.tar.gz
+            merx-*.zip
+            merx-*.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  upload:
+    name: Upload Release Assets
+    needs: [release-please, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # for uploading release assets
+    env:
+      TAG: ${{ needs.release-please.outputs.tag }}
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: artifacts-*
+          merge-multiple: true
+
       - name: Upload to release
-        run: gh release upload "$TAG" "$ARCHIVE_NAME" "$ARCHIVE_NAME.sha256" --clobber
+        run: gh release upload "$TAG" merx-*.tar.gz merx-*.zip merx-*.sha256 --clobber
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
