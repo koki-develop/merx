@@ -200,6 +200,24 @@ mod valid_flowcharts {
         assert_eq!(stdout, vec!["Hello"]);
         assert!(stderr.is_empty());
     }
+
+    #[test]
+    fn test_escape_single_quote() {
+        let source = include_str!("fixtures/valid/escape_single_quote.mmd");
+        let (stdout, stderr) = run_flowchart(source).expect("Should execute successfully");
+
+        assert_eq!(stdout, vec!["it's a test"]);
+        assert!(stderr.is_empty());
+    }
+
+    #[test]
+    fn test_escape_backslash() {
+        let source = include_str!("fixtures/valid/escape_backslash.mmd");
+        let (stdout, stderr) = run_flowchart(source).expect("Should execute successfully");
+
+        assert_eq!(stdout, vec!["backslash: \\\\"]);
+        assert!(stderr.is_empty());
+    }
 }
 
 // =============================================================================
@@ -256,6 +274,17 @@ mod invalid_flowcharts {
             err.to_string().contains("multiple 'Yes' edges"),
             "Error should mention multiple Yes edges: {}",
             err
+        );
+    }
+
+    #[test]
+    fn test_invalid_escape() {
+        let source = include_str!("fixtures/invalid/invalid_escape.mmd");
+        let result = parser::parse(source);
+
+        assert!(
+            result.is_err(),
+            "Should fail to parse invalid escape sequence"
         );
     }
 
@@ -640,6 +669,15 @@ mod double_quoted_labels {
 "#;
         let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
         assert_eq!(stdout, vec!["3"]);
+    }
+
+    #[test]
+    fn test_escape_sequences_in_double_quoted_node() {
+        let source =
+            "flowchart TD\n    Start --> A[\"println 'it\\\\'s working'\"]\n    A --> End\n";
+        let (stdout, stderr) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["it's working"]);
+        assert!(stderr.is_empty());
     }
 }
 

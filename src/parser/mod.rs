@@ -836,7 +836,7 @@ fn parse_primary(pair: Pair<Rule>) -> Result<Expr, ParseError> {
             // Remove surrounding quotes
             let content = &s[1..s.len() - 1];
             Ok(Expr::StrLit {
-                value: content.to_string(),
+                value: unescape_string(content),
             })
         }
         Rule::identifier => Ok(Expr::Variable {
@@ -844,6 +844,45 @@ fn parse_primary(pair: Pair<Rule>) -> Result<Expr, ParseError> {
         }),
         _ => unreachable!(),
     }
+}
+
+/// Processes escape sequences in a raw string extracted from between quotes.
+///
+/// The escape mechanism uses double-backslash (`\\`) as a prefix:
+/// - `\\'` (two backslashes + single quote) → literal `'`
+/// - `\\\\` (four backslashes) → literal `\\` (two backslashes)
+///
+/// # Arguments
+///
+/// * `raw` - The raw string content between the surrounding single quotes
+///
+/// # Returns
+///
+/// The unescaped string with escape sequences replaced.
+fn unescape_string(raw: &str) -> String {
+    let mut result = String::with_capacity(raw.len());
+    let mut chars = raw.chars();
+
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            // Grammar guarantees: first `\` is always followed by a second `\`,
+            // then either `'` or `\\`.
+            chars.next(); // consume the second `\`
+            match chars.next() {
+                Some('\'') => result.push('\''),
+                Some('\\') => {
+                    chars.next(); // consume the fourth `\`
+                    result.push('\\');
+                    result.push('\\');
+                }
+                _ => unreachable!("grammar guarantees valid escape sequence"),
+            }
+        } else {
+            result.push(c);
+        }
+    }
+
+    result
 }
 
 /// Converts a binary operator token into a [`BinaryOp`] enum value.
@@ -1691,5 +1730,135 @@ flowchart TD
             serde_json::to_string(u_end).unwrap(),
             "Quoted and unquoted End stadium labels should produce the same AST"
         );
+    }
+
+    #[test]
+    fn test_unescape_string_empty() {
+        assert_eq!(unescape_string(""), "");
+    }
+
+    #[test]
+    fn test_unescape_string_no_escapes() {
+        assert_eq!(unescape_string("hello world"), "hello world");
+    }
+
+    #[test]
+    fn test_unescape_string_escaped_quote() {
+        // \\' in raw content (2 backslashes + quote) → '
+        assert_eq!(unescape_string("\\\\'"), "'");
+    }
+
+    #[test]
+    fn test_unescape_string_escaped_backslash() {
+        // \\\\ in raw content (4 backslashes) → \\ (2 backslashes)
+        assert_eq!(unescape_string("\\\\\\\\"), "\\\\");
+    }
+
+    #[test]
+    fn test_unescape_string_mixed() {
+        // hello + \\' + world → hello'world
+        assert_eq!(unescape_string("hello\\\\'world"), "hello'world");
+    }
+
+    #[test]
+    fn test_unescape_string_multiple_escapes() {
+        // \\' + space + \\\\ → ' + space + \\
+        assert_eq!(unescape_string("\\\\' \\\\\\\\"), "' \\\\");
+    }
+
+    #[test]
+    fn test_parse_string_with_escaped_quote() {
+        let input = "flowchart TD\n    Start --> A[println 'it\\\\'s a test']\n    A --> End\n";
+        let flowchart = parse(input).unwrap();
+        let process = flowchart
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::Process { .. }))
+            .unwrap();
+        match process {
+            Node::Process { statements, .. } => match &statements[0] {
+                Statement::Println { expr } => match expr {
+                    Expr::StrLit { value } => assert_eq!(value, "it's a test"),
+                    _ => panic!("Expected StrLit"),
+                },
+                _ => panic!("Expected Println"),
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn test_parse_string_with_escaped_backslash() {
+        let input = "flowchart TD\n    Start --> A[println 'backslash: \\\\\\\\']\n    A --> End\n";
+        let flowchart = parse(input).unwrap();
+        let process = flowchart
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::Process { .. }))
+            .unwrap();
+        match process {
+            Node::Process { statements, .. } => match &statements[0] {
+                Statement::Println { expr } => match expr {
+                    Expr::StrLit { value } => assert_eq!(value, "backslash: \\\\"),
+                    _ => panic!("Expected StrLit"),
+                },
+                _ => panic!("Expected Println"),
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn test_parse_string_with_invalid_escape() {
+        // Single backslash should cause a parse error
+        let input = "flowchart TD\n    Start --> A[println 'hello\\world']\n    A --> End\n";
+        let result = parse(input);
+        assert!(result.is_err(), "Single backslash should cause parse error");
+    }
+
+    #[test]
+    fn test_parse_string_with_invalid_escape_sequence() {
+        // \\ followed by non-special char should cause a parse error
+        let input = "flowchart TD\n    Start --> A[println 'hello\\\\world']\n    A --> End\n";
+        let result = parse(input);
+        assert!(
+            result.is_err(),
+            "Invalid escape sequence should cause parse error"
+        );
+    }
+
+    #[test]
+    fn test_parse_string_trailing_backslash_is_error() {
+        // String ending with a lone backslash: 'hello\' should be a parse error,
+        // not interpreted as an escaped closing quote
+        let input = "flowchart TD\n    Start --> A[println 'hello\\']\n    A --> End\n";
+        let result = parse(input);
+        assert!(
+            result.is_err(),
+            "Trailing lone backslash should cause parse error"
+        );
+    }
+
+    #[test]
+    fn test_parse_escaped_quote_in_double_quoted_node() {
+        // Escape sequences should work inside double-quoted process node labels
+        let input =
+            "flowchart TD\n    Start --> A[\"println 'it\\\\'s working'\"]\n    A --> End\n";
+        let flowchart = parse(input).unwrap();
+        let process = flowchart
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::Process { .. }))
+            .unwrap();
+        match process {
+            Node::Process { statements, .. } => match &statements[0] {
+                Statement::Println { expr } => match expr {
+                    Expr::StrLit { value } => assert_eq!(value, "it's working"),
+                    _ => panic!("Expected StrLit"),
+                },
+                _ => panic!("Expected Println"),
+            },
+            _ => unreachable!(),
+        }
     }
 }
