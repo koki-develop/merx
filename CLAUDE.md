@@ -107,6 +107,12 @@ Release artifacts:
 - SHA256 checksums for each archive
 - Includes: binary, LICENSE, README.md
 
+### Homebrew Tap
+
+After release assets are uploaded, the `homebrew-tap` job automatically generates and pushes `merx.rb` to `koki-develop/homebrew-tap`. The formula is generated dynamically by downloading SHA256 checksums from the release and templating the Ruby file. Supported platforms for Homebrew (Windows excluded):
+- `x86_64-apple-darwin`, `aarch64-apple-darwin` (macOS)
+- `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu` (Linux)
+
 ## GitHub Actions Conventions
 
 - Use `github.token` instead of `secrets.GITHUB_TOKEN`
