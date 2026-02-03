@@ -107,13 +107,17 @@ pub enum RuntimeError {
     /// Flowchart is missing a `Start` node.
     ///
     /// Every valid flowchart must have exactly one `Start` node where
-    /// execution begins.
+    /// execution begins. This is normally caught at parse time, but is
+    /// also checked at runtime as a defensive measure for manually
+    /// constructed flowcharts.
     MissingStartNode,
 
     /// Flowchart is missing an `End` node.
     ///
     /// Every valid flowchart must have exactly one `End` node where
-    /// execution terminates.
+    /// execution terminates. This is normally caught at parse time, but is
+    /// also checked at runtime as a defensive measure for manually
+    /// constructed flowcharts.
     MissingEndNode,
 
     /// Node has no outgoing edge.

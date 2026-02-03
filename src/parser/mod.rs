@@ -86,6 +86,8 @@ struct MermaidParser;
 /// Returns [`ParseError`] in the following cases:
 ///
 /// - **Syntax errors**: Invalid Mermaid flowchart syntax
+/// - **Missing Start node**: Flowchart does not contain a `Start` node
+/// - **Missing End node**: Flowchart does not contain an `End` node
 /// - **Missing edges**: Condition nodes without both `Yes` and `No` edges
 /// - **Duplicate edges**: Condition nodes with multiple `Yes` or `No` edges
 /// - **Invalid labels**: Condition node edges with custom labels instead of `Yes`/`No`
@@ -115,9 +117,13 @@ struct MermaidParser;
 ///
 /// # Validation
 ///
-/// After parsing, the function validates that all condition nodes have
-/// exactly one `Yes` edge and one `No` edge. This ensures the flowchart
-/// can be executed without ambiguity.
+/// After parsing, the function validates that:
+/// - A `Start` node and an `End` node exist
+/// - All condition nodes have exactly one `Yes` edge and one `No` edge
+/// - The `End` node has no outgoing edges
+/// - Non-condition nodes have at most one outgoing edge
+///
+/// This ensures the flowchart can be executed without ambiguity.
 pub fn parse(input: &str) -> Result<Flowchart, ParseError> {
     let pairs = MermaidParser::parse(Rule::flowchart, input)?;
 
@@ -212,6 +218,14 @@ pub fn parse(input: &str) -> Result<Flowchart, ParseError> {
                 )));
             }
         }
+    }
+
+    // Validate: Flowchart must have Start and End nodes
+    if !nodes.values().any(|n| matches!(n, Node::Start { .. })) {
+        return Err(ParseError::new("Missing 'Start' node"));
+    }
+    if !nodes.values().any(|n| matches!(n, Node::End { .. })) {
+        return Err(ParseError::new("Missing 'End' node"));
     }
 
     // Validate: End node must not have outgoing edges
@@ -1420,37 +1434,42 @@ mod tests {
 
     #[test]
     fn test_parse_empty_flowchart() {
-        // Empty flowchart (no edges/nodes) should fail
         let input = r#"flowchart TD
 "#;
         let result = parse(input);
-        // An empty flowchart is technically valid syntax (0 lines),
-        // but it's not useful. Let's verify it parses but produces empty nodes/edges.
-        // Actually, let's check what happens - it might succeed with empty nodes.
-        assert!(result.is_ok());
-        let flowchart = result.unwrap();
-        assert!(flowchart.nodes.is_empty());
-        assert!(flowchart.edges.is_empty());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_missing_start_node() {
+        let input = r#"flowchart TD
+    A[x = 1] --> B[println x]
+    B --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("Missing 'Start' node"),
+            "Error should mention missing Start node: {}",
+            err
+        );
     }
 
     #[test]
     fn test_parse_missing_end_node() {
-        // Flowchart without End node - this is valid syntax,
-        // but the interpreter will fail at runtime.
-        // Parser doesn't require End node presence.
         let input = r#"flowchart TD
     Start --> A[x = 1]
     A --> B[y = 2]
 "#;
         let result = parse(input);
-        // Parser allows this - End node validation is done at runtime
-        assert!(result.is_ok());
-        let flowchart = result.unwrap();
-        let has_end = flowchart
-            .nodes
-            .iter()
-            .any(|n| matches!(n, Node::End { .. }));
-        assert!(!has_end, "Should not have End node");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("Missing 'End' node"),
+            "Error should mention missing End node: {}",
+            err
+        );
     }
 
     #[test]

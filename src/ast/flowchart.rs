@@ -22,11 +22,10 @@ use super::{Edge, Node};
 /// # Invariants
 ///
 /// A valid flowchart must contain:
-/// - Exactly one `Start` node (enforced at runtime)
-/// - Exactly one `End` node (enforced at runtime)
+/// - Exactly one `Start` node (enforced at parse time and runtime)
+/// - Exactly one `End` node (enforced at parse time and runtime)
 ///
 /// Note: Path connectivity from `Start` to `End` is not validated.
-/// These invariants are enforced during runtime initialization, not parsing.
 ///
 /// # See Also
 ///

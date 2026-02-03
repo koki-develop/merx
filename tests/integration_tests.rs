@@ -19,10 +19,6 @@ impl MockInputReader {
             index: 0,
         }
     }
-
-    fn empty() -> Self {
-        Self::new(vec![])
-    }
 }
 
 impl InputReader for MockInputReader {
@@ -375,6 +371,38 @@ mod invalid_flowcharts {
             "Should fail to parse invalid hex escape sequence"
         );
     }
+
+    #[test]
+    fn test_missing_start_node() {
+        let source = include_str!("fixtures/invalid/missing_start.mmd");
+        let result = parser::parse(source);
+        assert!(
+            result.is_err(),
+            "Should fail at parse with missing Start node"
+        );
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("Missing 'Start' node"),
+            "Error should mention missing Start node: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_missing_end_node() {
+        let source = include_str!("fixtures/invalid/missing_end.mmd");
+        let result = parser::parse(source);
+        assert!(
+            result.is_err(),
+            "Should fail at parse with missing End node"
+        );
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("Missing 'End' node"),
+            "Error should mention missing End node: {}",
+            err
+        );
+    }
 }
 
 // =============================================================================
@@ -383,54 +411,6 @@ mod invalid_flowcharts {
 
 mod runtime_errors {
     use super::*;
-
-    #[test]
-    fn test_missing_start_node_runtime() {
-        // Parser allows missing Start, but runtime should fail
-        let source = include_str!("fixtures/invalid/missing_start.mmd");
-
-        // First verify it parses
-        let flowchart = parser::parse(source).expect("Should parse successfully");
-
-        // Then verify runtime fails
-        let input = MockInputReader::empty();
-        let output = MockOutputWriter::new();
-        let result = Interpreter::with_io(flowchart, input, output);
-
-        assert!(
-            result.is_err(),
-            "Should fail at runtime with missing Start node"
-        );
-        match result {
-            Err(RuntimeError::MissingStartNode) => {}
-            Err(e) => panic!("Should be MissingStartNode error, got: {:?}", e),
-            Ok(_) => panic!("Should have failed"),
-        }
-    }
-
-    #[test]
-    fn test_missing_end_node_runtime() {
-        // Parser allows missing End, but runtime should fail
-        let source = include_str!("fixtures/invalid/missing_end.mmd");
-
-        // First verify it parses
-        let flowchart = parser::parse(source).expect("Should parse successfully");
-
-        // Then verify runtime fails
-        let input = MockInputReader::empty();
-        let output = MockOutputWriter::new();
-        let result = Interpreter::with_io(flowchart, input, output);
-
-        assert!(
-            result.is_err(),
-            "Should fail at runtime with missing End node"
-        );
-        match result {
-            Err(RuntimeError::MissingEndNode) => {}
-            Err(e) => panic!("Should be MissingEndNode error, got: {:?}", e),
-            Ok(_) => panic!("Should have failed"),
-        }
-    }
 
     #[test]
     fn test_undefined_variable() {

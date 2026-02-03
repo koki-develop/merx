@@ -8,7 +8,7 @@
 //! The interpreter follows a graph-based execution model:
 //!
 //! 1. **Initialization**: Build node and edge lookup tables from the flowchart
-//! 2. **Validation**: Ensure exactly one Start and one End node exist
+//! 2. **Validation**: Verify Start and End nodes exist (defensive; normally caught at parse time)
 //! 3. **Execution**: Starting from `Start`, follow edges through the graph
 //! 4. **Termination**: Execution ends when the `End` node is reached
 //!
@@ -177,15 +177,14 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
     ///
     /// # Errors
     ///
-    /// Same as [`Interpreter::new`]:
-    /// - [`RuntimeError::MissingStartNode`]
-    /// - [`RuntimeError::MissingEndNode`]
+    /// - [`RuntimeError::MissingStartNode`] - No `Start` node found
+    /// - [`RuntimeError::MissingEndNode`] - No `End` node found
     ///
     /// # Implementation Details
     ///
     /// Construction performs these steps:
     /// 1. Build node lookup table from flowchart nodes
-    /// 2. Count Start and End nodes for validation
+    /// 2. Validate Start and End nodes exist (defensive; normally caught at parse time)
     /// 3. Build edge lookup table from flowchart edges
     /// 4. Initialize empty environment
     pub fn with_io(
@@ -195,24 +194,18 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
     ) -> Result<Self, RuntimeError> {
         // Build the node map
         let mut nodes: HashMap<String, Node> = HashMap::new();
-        let mut start_count = 0;
-        let mut end_count = 0;
-
         for node in flowchart.nodes {
             let id = node.id().to_string();
-            match &node {
-                Node::Start { .. } => start_count += 1,
-                Node::End { .. } => end_count += 1,
-                _ => {}
-            }
             nodes.insert(id, node);
         }
 
-        // Validate Start/End nodes
-        if start_count == 0 {
+        // Defensive validation for Start/End nodes.
+        // Normally caught at parse time, but checked here as well for
+        // manually constructed Flowchart structs that bypass the parser.
+        if !nodes.values().any(|n| matches!(n, Node::Start { .. })) {
             return Err(RuntimeError::MissingStartNode);
         }
-        if end_count == 0 {
+        if !nodes.values().any(|n| matches!(n, Node::End { .. })) {
             return Err(RuntimeError::MissingEndNode);
         }
 
