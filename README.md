@@ -7,6 +7,7 @@
 <a href="https://github.com/koki-develop/merx/releases/latest"><img alt="GitHub release (latest by date)" src="https://img.shields.io/github/v/release/koki-develop/merx?style=flat"></a>
 <a href="./LICENSE"><img src="https://img.shields.io/github/license/koki-develop/merx?style=flat" /></a>
 <a href="https://github.com/koki-develop/merx/actions/workflows/ci.yml"><img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/koki-develop/merx/ci.yml?branch=main&logo=github&style=flat" /></a>
+<a href="https://codecov.io/gh/koki-develop/merx" ><img src="https://codecov.io/gh/koki-develop/merx/graph/badge.svg?token=H2WG9FO7A4"/></a>
 </p>
 
 <p align="center">
