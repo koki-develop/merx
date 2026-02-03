@@ -92,18 +92,6 @@ fn run_flowchart_with_input(
     Ok((output.stdout, output.stderr))
 }
 
-/// Helper to run a flowchart expecting it to succeed with captured output.
-#[allow(dead_code)]
-fn run_flowchart_expect_output(source: &str) -> MockOutputWriter {
-    let flowchart = parser::parse(source).expect("Failed to parse");
-    let input = MockInputReader::empty();
-    let output = MockOutputWriter::new();
-    let mut interpreter =
-        Interpreter::with_io(flowchart, input, output).expect("Failed to create interpreter");
-    interpreter.run().expect("Failed to run");
-    interpreter.into_output_writer()
-}
-
 // =============================================================================
 // Valid flowchart tests
 // =============================================================================
