@@ -41,6 +41,14 @@ pub struct Edge {
     /// or [`EdgeLabel::No`]. Custom labels are allowed but have no special
     /// meaning to the interpreter.
     pub label: Option<EdgeLabel>,
+
+    /// An optional exit code for edges leading to the `End` node.
+    ///
+    /// When specified via `|exit N|` or `|Yes, exit N|` / `|No, exit N|`
+    /// syntax, the interpreter uses this value as the process exit code.
+    /// Only valid on edges targeting the `End` node. Defaults to `0` when
+    /// not specified.
+    pub exit_code: Option<u8>,
 }
 
 /// A label attached to an edge for conditional branching.

@@ -211,6 +211,16 @@ fn validate_flowchart(
         }
     }
 
+    // Validate: exit code is only allowed on edges pointing to the End node
+    for edge in edges {
+        if edge.exit_code.is_some() && edge.to != "End" {
+            return Err(ValidationError::new(format!(
+                "Exit code can only be specified on edges to 'End' node, but found on edge from '{}' to '{}'",
+                edge.from, edge.to
+            )));
+        }
+    }
+
     Ok(())
 }
 
@@ -300,6 +310,7 @@ pub fn parse(input: &str) -> Result<Flowchart, AnalysisError> {
                             from: parsed.from_id,
                             to: parsed.to_id,
                             label: parsed.label,
+                            exit_code: parsed.exit_code,
                         });
                     }
                     _ => {}
@@ -340,6 +351,17 @@ fn parse_direction(pair: Pair<Rule>) -> Direction {
     }
 }
 
+/// Result of parsing label text from an edge.
+///
+/// Contains the parsed edge label and optional exit code extracted from
+/// syntax like `exit N` or `Yes, exit N`.
+struct ParsedLabel {
+    /// The edge label (Yes, No, Custom, or None for exit-code-only labels).
+    edge_label: Option<EdgeLabel>,
+    /// Optional exit code (0-255) parsed from `exit N` syntax.
+    exit_code: Option<u8>,
+}
+
 /// Result of parsing a single line (edge definition) in the flowchart.
 ///
 /// Contains the edge information and any node definitions found on the line.
@@ -350,6 +372,8 @@ struct ParsedLine {
     to_id: String,
     /// Optional edge label (`Yes`, `No`, or custom text).
     label: Option<EdgeLabel>,
+    /// Optional exit code parsed from the edge label.
+    exit_code: Option<u8>,
     /// The source node definition, if present on this line.
     from_node: Option<Node>,
     /// The target node definition, if present on this line.
@@ -394,9 +418,9 @@ fn parse_line(pair: Pair<Rule>) -> Result<ParsedLine, SyntaxError> {
         .next()
         .ok_or_else(|| SyntaxError::new("internal: expected arrow in edge_def"))?;
 
-    let mut label = None;
+    let mut parsed_label: Option<ParsedLabel> = None;
     if arrow_pair.as_rule() == Rule::arrow_with_inline_label {
-        label = Some(parse_inline_label(arrow_pair)?);
+        parsed_label = Some(parse_inline_label(arrow_pair)?);
     }
 
     let mut to_pair = inner
@@ -404,13 +428,13 @@ fn parse_line(pair: Pair<Rule>) -> Result<ParsedLine, SyntaxError> {
         .ok_or_else(|| SyntaxError::new("internal: expected to_pair in edge_def"))?;
 
     if to_pair.as_rule() == Rule::edge_label {
-        if label.is_some() {
+        if parsed_label.is_some() {
             return Err(SyntaxError::new(format!(
                 "edge from '{}' cannot have both an inline label (--text-->) and a pipe label (|text|)",
                 from_id
             )));
         }
-        label = Some(parse_edge_label(to_pair)?);
+        parsed_label = Some(parse_edge_label(to_pair)?);
         to_pair = inner
             .next()
             .ok_or_else(|| SyntaxError::new("internal: expected to_pair after edge_label"))?;
@@ -418,10 +442,16 @@ fn parse_line(pair: Pair<Rule>) -> Result<ParsedLine, SyntaxError> {
 
     let (to_id, to_node) = parse_node_ref(to_pair)?;
 
+    let (label, exit_code) = match parsed_label {
+        Some(pl) => (pl.edge_label, pl.exit_code),
+        None => (None, None),
+    };
+
     Ok(ParsedLine {
         from_id,
         to_id,
         label,
+        exit_code,
         from_node,
         to_node,
     })
@@ -442,17 +472,17 @@ fn parse_line(pair: Pair<Rule>) -> Result<ParsedLine, SyntaxError> {
 /// - [`EdgeLabel::Yes`] for "yes" (case-insensitive)
 /// - [`EdgeLabel::No`] for "no" (case-insensitive)
 /// - [`EdgeLabel::Custom`] for any other text
-fn parse_edge_label(pair: Pair<Rule>) -> Result<EdgeLabel, SyntaxError> {
+fn parse_edge_label(pair: Pair<Rule>) -> Result<ParsedLabel, SyntaxError> {
     let label_text = pair
         .into_inner()
         .next()
         .ok_or_else(|| SyntaxError::new("internal: expected label_text in edge_label"))?
         .as_str()
         .trim();
-    Ok(label_text_to_edge_label(label_text))
+    parse_label_text(label_text)
 }
 
-fn parse_inline_label(pair: Pair<Rule>) -> Result<EdgeLabel, SyntaxError> {
+fn parse_inline_label(pair: Pair<Rule>) -> Result<ParsedLabel, SyntaxError> {
     let label_text = pair
         .into_inner()
         .find(|p| p.as_rule() == Rule::label_text)
@@ -461,15 +491,112 @@ fn parse_inline_label(pair: Pair<Rule>) -> Result<EdgeLabel, SyntaxError> {
         })?
         .as_str()
         .trim();
-    Ok(label_text_to_edge_label(label_text))
+    parse_label_text(label_text)
 }
 
-fn label_text_to_edge_label(text: &str) -> EdgeLabel {
-    match text.to_lowercase().as_str() {
-        "yes" => EdgeLabel::Yes,
-        "no" => EdgeLabel::No,
-        _ => EdgeLabel::Custom(text.to_string()),
+/// Parses label text into an edge label and optional exit code.
+///
+/// Recognizes the following patterns (case-insensitive):
+/// - `"yes"` / `"no"` → Yes/No label, no exit code
+/// - `"yes, exit N"` / `"no, exit N"` → Yes/No label with exit code
+/// - `"exit N"` → no label, with exit code
+/// - `"exit"` (no number) → Custom label
+/// - anything else → Custom label
+fn parse_label_text(text: &str) -> Result<ParsedLabel, SyntaxError> {
+    let lower = text.to_lowercase();
+    let trimmed_lower = lower.trim();
+
+    // Check for "yes" or "yes, exit N"
+    if let Some(rest) = trimmed_lower.strip_prefix("yes") {
+        let rest = rest.trim();
+        if rest.is_empty() {
+            return Ok(ParsedLabel {
+                edge_label: Some(EdgeLabel::Yes),
+                exit_code: None,
+            });
+        }
+        if let Some(after_comma) = rest.strip_prefix(',') {
+            let after_comma = after_comma.trim();
+            if let Some(exit_code) = parse_exit_code_text(after_comma)? {
+                return Ok(ParsedLabel {
+                    edge_label: Some(EdgeLabel::Yes),
+                    exit_code: Some(exit_code),
+                });
+            }
+        }
     }
+
+    // Check for "no" or "no, exit N"
+    if let Some(rest) = trimmed_lower.strip_prefix("no") {
+        let rest = rest.trim();
+        if rest.is_empty() {
+            return Ok(ParsedLabel {
+                edge_label: Some(EdgeLabel::No),
+                exit_code: None,
+            });
+        }
+        if let Some(after_comma) = rest.strip_prefix(',') {
+            let after_comma = after_comma.trim();
+            if let Some(exit_code) = parse_exit_code_text(after_comma)? {
+                return Ok(ParsedLabel {
+                    edge_label: Some(EdgeLabel::No),
+                    exit_code: Some(exit_code),
+                });
+            }
+        }
+    }
+
+    // Check for standalone "exit N"
+    if let Some(rest) = trimmed_lower.strip_prefix("exit") {
+        // Ensure "exit" is a whole word (followed by whitespace or end of string)
+        if rest.is_empty() || rest.starts_with(|c: char| c.is_whitespace()) {
+            let rest = rest.trim();
+            if !rest.is_empty() {
+                let exit_code = rest.parse::<u8>().map_err(|_| {
+                    SyntaxError::new(format!(
+                        "invalid exit code '{}': must be an integer between 0 and 255",
+                        rest
+                    ))
+                })?;
+                return Ok(ParsedLabel {
+                    edge_label: None,
+                    exit_code: Some(exit_code),
+                });
+            }
+            // "exit" without a number → treat as custom label
+        }
+        // "exit<non-whitespace>" (e.g., "exiting") → treat as custom label
+    }
+
+    // Everything else is a custom label
+    Ok(ParsedLabel {
+        edge_label: Some(EdgeLabel::Custom(text.to_string())),
+        exit_code: None,
+    })
+}
+
+/// Parses "exit N" text and returns the exit code, or None if not matching.
+fn parse_exit_code_text(text: &str) -> Result<Option<u8>, SyntaxError> {
+    if let Some(rest) = text.strip_prefix("exit") {
+        // Ensure "exit" is a whole word (followed by whitespace or end of string)
+        if !rest.is_empty() && !rest.starts_with(|c: char| c.is_whitespace()) {
+            return Ok(None); // Not "exit", e.g. "exiting"
+        }
+        let rest = rest.trim();
+        if rest.is_empty() {
+            return Err(SyntaxError::new(
+                "exit code requires a numeric value (e.g., 'exit 1')",
+            ));
+        }
+        let exit_code = rest.parse::<u8>().map_err(|_| {
+            SyntaxError::new(format!(
+                "invalid exit code '{}': must be an integer between 0 and 255",
+                rest
+            ))
+        })?;
+        return Ok(Some(exit_code));
+    }
+    Ok(None)
 }
 
 /// Parses a node reference, which may be a full definition or a bare identifier.

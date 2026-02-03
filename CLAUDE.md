@@ -78,19 +78,21 @@ tests/
 - Validates non-condition nodes have at most one outgoing edge
 - Detects duplicate node definitions at parse time
 - Detects undefined node references at parse time
+- Validates exit code is only allowed on edges to the `End` node
+- Parses edge labels with exit code syntax: `exit N`, `Yes, exit N`, `No, exit N`
 
 ### AST
 
 - `Flowchart`: Top-level structure containing direction, nodes, and edges
 - `Node`: Enum with variants `Start`, `End`, `Process { id, statements }`, `Condition { id, condition }`
-- `Edge`: Connects nodes with optional labels (`Yes`, `No`, or custom)
+- `Edge`: Connects nodes with optional labels (`Yes`, `No`, or custom) and optional `exit_code: Option<u8>`
 - `Expr`: Expression tree supporting literals, variables, binary/unary ops, casts, and `input`
 - `Statement`: `Println`, `Print`, `Error`, or `Assign`
 
 ### Runtime
 
 - Entry point: `runtime::Interpreter::new(Flowchart) -> Result<Interpreter, RuntimeError>`
-- `Interpreter::run()` executes the flowchart from Start to End
+- `Interpreter::run()` executes the flowchart from Start to End, returning the exit code (`Result<u8, RuntimeError>`)
 - `Value`: Runtime values (`Int(i64)`, `Str(String)`, `Bool(bool)`)
 - `Environment`: HashMap-based variable storage
 - `InputReader` / `OutputWriter` traits for testability (dependency injection)

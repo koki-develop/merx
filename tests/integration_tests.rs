@@ -91,6 +91,22 @@ fn run_flowchart_with_input(
     Ok((output.stdout, output.stderr))
 }
 
+/// Helper function to run a flowchart and return the exit code along with output.
+fn run_flowchart_with_exit_code(source: &str) -> Result<(u8, Vec<String>, Vec<String>), String> {
+    let flowchart = parser::parse(source).map_err(|e| e.to_string())?;
+
+    let input = MockInputReader::new(vec![]);
+    let output = MockOutputWriter::new();
+
+    let mut interpreter =
+        Interpreter::with_io(flowchart, input, output).map_err(|e| e.to_string())?;
+
+    let exit_code = interpreter.run().map_err(|e| e.to_string())?;
+
+    let output = interpreter.into_output_writer();
+    Ok((exit_code, output.stdout, output.stderr))
+}
+
 // =============================================================================
 // Valid flowchart tests
 // =============================================================================
@@ -947,5 +963,204 @@ mod direction_tests {
                 dir_str
             );
         }
+    }
+}
+
+// =============================================================================
+// Exit code tests
+// =============================================================================
+
+mod exit_code {
+    use super::*;
+
+    #[test]
+    fn test_default_exit_code() {
+        let source = r#"flowchart TD
+    Start --> End
+"#;
+        let (exit_code, _, _) = run_flowchart_with_exit_code(source).unwrap();
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_exit_code_simple() {
+        let source = r#"flowchart TD
+    Start --> A[println 'done']
+    A -->|exit 1| End
+"#;
+        let (exit_code, stdout, _) = run_flowchart_with_exit_code(source).unwrap();
+        assert_eq!(exit_code, 1);
+        assert_eq!(stdout, vec!["done"]);
+    }
+
+    #[test]
+    fn test_exit_code_zero() {
+        let source = r#"flowchart TD
+    Start --> A[println 'ok']
+    A -->|exit 0| End
+"#;
+        let (exit_code, _, _) = run_flowchart_with_exit_code(source).unwrap();
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_exit_code_max() {
+        let source = r#"flowchart TD
+    Start -->|exit 255| End
+"#;
+        let (exit_code, _, _) = run_flowchart_with_exit_code(source).unwrap();
+        assert_eq!(exit_code, 255);
+    }
+
+    #[test]
+    fn test_exit_code_condition_yes() {
+        let source = r#"flowchart TD
+    Start --> A{true?}
+    A -->|Yes, exit 42| End
+    A -->|No| B[println 'no']
+    B --> End
+"#;
+        let (exit_code, _, _) = run_flowchart_with_exit_code(source).unwrap();
+        assert_eq!(exit_code, 42);
+    }
+
+    #[test]
+    fn test_exit_code_condition_no() {
+        let source = r#"flowchart TD
+    Start --> A{false?}
+    A -->|Yes| B[println 'yes']
+    B --> End
+    A -->|No, exit 7| End
+"#;
+        let (exit_code, _, _) = run_flowchart_with_exit_code(source).unwrap();
+        assert_eq!(exit_code, 7);
+    }
+
+    #[test]
+    fn test_exit_code_inline_label() {
+        let source = r#"flowchart TD
+    Start --exit 3--> End
+"#;
+        let (exit_code, _, _) = run_flowchart_with_exit_code(source).unwrap();
+        assert_eq!(exit_code, 3);
+    }
+
+    #[test]
+    fn test_exit_code_overflow() {
+        let source = r#"flowchart TD
+    Start -->|exit 256| End
+"#;
+        let result = parser::parse(source);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("invalid exit code"));
+    }
+
+    #[test]
+    fn test_exit_code_not_to_end() {
+        let source = r#"flowchart TD
+    Start -->|exit 1| A[println 'hello']
+    A --> End
+"#;
+        let result = parser::parse(source);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Exit code can only be specified on edges to 'End' node"));
+    }
+
+    #[test]
+    fn test_exit_label_without_number_is_custom() {
+        // "exit" without a number should be treated as a custom label
+        let source = r#"flowchart TD
+    Start -->|exit| A[println 'hello']
+    A --> End
+"#;
+        let (exit_code, stdout, _) = run_flowchart_with_exit_code(source).unwrap();
+        assert_eq!(exit_code, 0);
+        assert_eq!(stdout, vec!["hello"]);
+    }
+
+    #[test]
+    fn test_exiting_is_custom_label() {
+        // "exiting" should be treated as a custom label, not "exit" + invalid number
+        let source = r#"flowchart TD
+    Start -->|exiting| A[println 'hello']
+    A --> End
+"#;
+        let (exit_code, stdout, _) = run_flowchart_with_exit_code(source).unwrap();
+        assert_eq!(exit_code, 0);
+        assert_eq!(stdout, vec!["hello"]);
+    }
+
+    #[test]
+    fn test_exit_no_space_is_custom_label() {
+        // "exit123" without space should be treated as a custom label
+        let source = r#"flowchart TD
+    Start -->|exit123| A[println 'hello']
+    A --> End
+"#;
+        let (exit_code, stdout, _) = run_flowchart_with_exit_code(source).unwrap();
+        assert_eq!(exit_code, 0);
+        assert_eq!(stdout, vec!["hello"]);
+    }
+
+    #[test]
+    fn test_yes_exit_without_number_is_error() {
+        let source = r#"flowchart TD
+    Start --> A{true?}
+    A -->|Yes, exit| End
+    A -->|No| B[println 'no']
+    B --> End
+"#;
+        let result = parser::parse(source);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("exit code requires a numeric value"));
+    }
+
+    #[test]
+    fn test_exit_code_case_insensitive() {
+        let source = r#"flowchart TD
+    Start -->|EXIT 1| End
+"#;
+        let (exit_code, _, _) = run_flowchart_with_exit_code(source).unwrap();
+        assert_eq!(exit_code, 1);
+    }
+
+    #[test]
+    fn test_yes_exit_case_insensitive() {
+        let source = r#"flowchart TD
+    Start --> A{true?}
+    A -->|YES, EXIT 42| End
+    A -->|No| B[println 'no']
+    B --> End
+"#;
+        let (exit_code, _, _) = run_flowchart_with_exit_code(source).unwrap();
+        assert_eq!(exit_code, 42);
+    }
+
+    #[test]
+    fn test_condition_both_branches_exit_code() {
+        let source = r#"flowchart TD
+    Start --> A{true?}
+    A -->|Yes, exit 42| End
+    A -->|No, exit 99| End
+"#;
+        let (exit_code, _, _) = run_flowchart_with_exit_code(source).unwrap();
+        assert_eq!(exit_code, 42);
+    }
+
+    #[test]
+    fn test_yes_exit_overflow() {
+        let source = r#"flowchart TD
+    Start --> A{true?}
+    A -->|Yes, exit 999| End
+    A -->|No| B[println 'no']
+    B --> End
+"#;
+        let result = parser::parse(source);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("invalid exit code"));
     }
 }

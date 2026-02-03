@@ -124,6 +124,12 @@ pub struct Interpreter<R: InputReader, W: OutputWriter> {
 
     /// The output destination for print/error statements.
     output_writer: W,
+
+    /// The exit code from the most recently traversed edge.
+    ///
+    /// Updated each time an edge is followed. When the `End` node is reached,
+    /// this value is returned (defaulting to 0 if `None`).
+    last_exit_code: Option<u8>,
 }
 
 impl Interpreter<StdinReader<io::BufReader<io::Stdin>>, StdioWriter> {
@@ -225,6 +231,7 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
             env: Environment::new(),
             input_reader,
             output_writer,
+            last_exit_code: None,
         })
     }
 
@@ -246,7 +253,8 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
     ///
     /// # Returns
     ///
-    /// `Ok(())` when execution reaches the `End` node normally.
+    /// `Ok(exit_code)` when execution reaches the `End` node normally.
+    /// The exit code is determined by the edge leading to `End` (defaults to `0`).
     ///
     /// # Errors
     ///
@@ -262,11 +270,11 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
     /// let mut interpreter = Interpreter::new(flowchart).unwrap();
     ///
     /// match interpreter.run() {
-    ///     Ok(()) => println!("Program completed successfully"),
+    ///     Ok(exit_code) => std::process::exit(exit_code as i32),
     ///     Err(e) => eprintln!("Runtime error: {}", e),
     /// }
     /// ```
-    pub fn run(&mut self) -> Result<(), RuntimeError> {
+    pub fn run(&mut self) -> Result<u8, RuntimeError> {
         loop {
             let node = self
                 .nodes
@@ -282,8 +290,8 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
                     self.move_to_next()?;
                 }
                 Node::End { .. } => {
-                    // Terminate
-                    return Ok(());
+                    // Terminate with the exit code from the last edge (default: 0)
+                    return Ok(self.last_exit_code.unwrap_or(0));
                 }
                 Node::Process { statements, .. } => {
                     // Execute all statements
@@ -335,6 +343,7 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
         }
 
         // Use the first edge from normal nodes
+        self.last_exit_code = edges[0].exit_code;
         self.current_node_id = edges[0].to.clone();
         Ok(())
     }
@@ -375,6 +384,7 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
                     (EdgeLabel::Yes, EdgeLabel::Yes) | (EdgeLabel::No, EdgeLabel::No)
                 )
             {
+                self.last_exit_code = edge.exit_code;
                 self.current_node_id = edge.to.clone();
                 return Ok(());
             }
@@ -486,11 +496,13 @@ mod tests {
                     from: "Start".to_string(),
                     to: "A".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "A".to_string(),
                     to: "End".to_string(),
                     label: None,
+                    exit_code: None,
                 },
             ],
         }
@@ -544,31 +556,37 @@ mod tests {
                     from: "Start".to_string(),
                     to: "A".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "A".to_string(),
                     to: "B".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "B".to_string(),
                     to: "C".to_string(),
                     label: Some(EdgeLabel::Yes),
+                    exit_code: None,
                 },
                 Edge {
                     from: "B".to_string(),
                     to: "D".to_string(),
                     label: Some(EdgeLabel::No),
+                    exit_code: None,
                 },
                 Edge {
                     from: "C".to_string(),
                     to: "End".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "D".to_string(),
                     to: "End".to_string(),
                     label: None,
+                    exit_code: None,
                 },
             ],
         }
@@ -663,11 +681,13 @@ mod tests {
                     from: "Start".to_string(),
                     to: "A".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "A".to_string(),
                     to: "End".to_string(),
                     label: None,
+                    exit_code: None,
                 },
             ],
         };
@@ -734,26 +754,31 @@ mod tests {
                     from: "Start".to_string(),
                     to: "A".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "A".to_string(),
                     to: "B".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "B".to_string(),
                     to: "C".to_string(),
                     label: Some(EdgeLabel::Yes),
+                    exit_code: None,
                 },
                 Edge {
                     from: "B".to_string(),
                     to: "End".to_string(),
                     label: Some(EdgeLabel::No),
+                    exit_code: None,
                 },
                 Edge {
                     from: "C".to_string(),
                     to: "B".to_string(),
                     label: None,
+                    exit_code: None,
                 },
             ],
         };
@@ -784,11 +809,13 @@ mod tests {
                     from: "Start".to_string(),
                     to: "A".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "A".to_string(),
                     to: "End".to_string(),
                     label: Some(EdgeLabel::Yes),
+                    exit_code: None,
                 },
             ],
         };
@@ -826,11 +853,13 @@ mod tests {
                     from: "Start".to_string(),
                     to: "A".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "A".to_string(),
                     to: "End".to_string(),
                     label: Some(EdgeLabel::No),
+                    exit_code: None,
                 },
             ],
         };
@@ -867,11 +896,13 @@ mod tests {
                     from: "Start".to_string(),
                     to: "A".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "A".to_string(),
                     to: "End".to_string(),
                     label: Some(EdgeLabel::Yes),
+                    exit_code: None,
                 },
             ],
         };
@@ -900,6 +931,7 @@ mod tests {
                 from: "Start".to_string(),
                 to: "NonExistent".to_string(),
                 label: None,
+                exit_code: None,
             }],
         };
         let input = MockInputReader::new(vec![]);
@@ -982,46 +1014,55 @@ mod tests {
                     from: "Start".to_string(),
                     to: "Init".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "Init".to_string(),
                     to: "A".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "A".to_string(),
                     to: "B".to_string(),
                     label: Some(EdgeLabel::Yes),
+                    exit_code: None,
                 },
                 Edge {
                     from: "A".to_string(),
                     to: "E".to_string(),
                     label: Some(EdgeLabel::No),
+                    exit_code: None,
                 },
                 Edge {
                     from: "B".to_string(),
                     to: "C".to_string(),
                     label: Some(EdgeLabel::Yes),
+                    exit_code: None,
                 },
                 Edge {
                     from: "B".to_string(),
                     to: "D".to_string(),
                     label: Some(EdgeLabel::No),
+                    exit_code: None,
                 },
                 Edge {
                     from: "C".to_string(),
                     to: "End".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "D".to_string(),
                     to: "End".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "E".to_string(),
                     to: "End".to_string(),
                     label: None,
+                    exit_code: None,
                 },
             ],
         };
@@ -1143,76 +1184,91 @@ mod tests {
                     from: "Start".to_string(),
                     to: "Init".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "Init".to_string(),
                     to: "C1".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "C1".to_string(),
                     to: "C2".to_string(),
                     label: Some(EdgeLabel::Yes),
+                    exit_code: None,
                 },
                 Edge {
                     from: "C1".to_string(),
                     to: "P5".to_string(),
                     label: Some(EdgeLabel::No),
+                    exit_code: None,
                 },
                 Edge {
                     from: "C2".to_string(),
                     to: "C3".to_string(),
                     label: Some(EdgeLabel::Yes),
+                    exit_code: None,
                 },
                 Edge {
                     from: "C2".to_string(),
                     to: "P4".to_string(),
                     label: Some(EdgeLabel::No),
+                    exit_code: None,
                 },
                 Edge {
                     from: "C3".to_string(),
                     to: "C4".to_string(),
                     label: Some(EdgeLabel::Yes),
+                    exit_code: None,
                 },
                 Edge {
                     from: "C3".to_string(),
                     to: "P3".to_string(),
                     label: Some(EdgeLabel::No),
+                    exit_code: None,
                 },
                 Edge {
                     from: "C4".to_string(),
                     to: "P1".to_string(),
                     label: Some(EdgeLabel::Yes),
+                    exit_code: None,
                 },
                 Edge {
                     from: "C4".to_string(),
                     to: "P2".to_string(),
                     label: Some(EdgeLabel::No),
+                    exit_code: None,
                 },
                 Edge {
                     from: "P1".to_string(),
                     to: "End".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "P2".to_string(),
                     to: "End".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "P3".to_string(),
                     to: "End".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "P4".to_string(),
                     to: "End".to_string(),
                     label: None,
+                    exit_code: None,
                 },
                 Edge {
                     from: "P5".to_string(),
                     to: "End".to_string(),
                     label: None,
+                    exit_code: None,
                 },
             ],
         };

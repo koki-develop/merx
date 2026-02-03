@@ -53,7 +53,7 @@ fn main() -> ExitCode {
             };
 
             match interpreter.run() {
-                Ok(()) => ExitCode::SUCCESS,
+                Ok(exit_code) => ExitCode::from(exit_code),
                 Err(e) => {
                     eprintln!("Runtime error: {}", e);
                     ExitCode::from(1)

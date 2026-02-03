@@ -26,7 +26,7 @@ arrow_with_inline_label = { arrow_prefix ~ label_text ~ arrow_suffix }
 arrow_prefix = @{ "--" ~ "-"* }
 arrow_suffix = @{ "--" ~ "-"* ~ ">" }
 edge_label = { "|" ~ label_text ~ "|" }
-label_text = @{ (ASCII_ALPHANUMERIC | "_" | " " | "\t")+ }
+label_text = @{ (ASCII_ALPHANUMERIC | "_" | " " | "\t" | ",")+ }
 
 // Node reference (can be a definition or just an identifier)
 node_ref = { node_with_def | bare_identifier }
