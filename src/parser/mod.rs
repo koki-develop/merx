@@ -258,6 +258,22 @@ pub fn parse(input: &str) -> Result<Flowchart, ParseError> {
         return Err(ParseError::new("Missing 'End' node"));
     }
 
+    // Validate: All edge references must point to defined nodes
+    for edge in &edges {
+        if !nodes.contains_key(&edge.from) {
+            return Err(ParseError::new(format!(
+                "Undefined node '{}' referenced in edge from '{}' to '{}'",
+                edge.from, edge.from, edge.to
+            )));
+        }
+        if !nodes.contains_key(&edge.to) {
+            return Err(ParseError::new(format!(
+                "Undefined node '{}' referenced in edge from '{}' to '{}'",
+                edge.to, edge.from, edge.to
+            )));
+        }
+    }
+
     // Validate: End node must not have outgoing edges
     for edge in &edges {
         if edge.from == "End" {
@@ -2135,6 +2151,63 @@ flowchart TD
         assert!(
             result.is_err(),
             "Incomplete hex escape should cause parse error"
+        );
+    }
+
+    #[test]
+    fn test_undefined_node_in_edge_to() {
+        let input = r#"flowchart TD
+    Start --> A[x = 1]
+    A --> B
+    B --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Undefined node 'B' referenced in edge from 'A' to 'B'"
+        );
+    }
+
+    #[test]
+    fn test_undefined_node_in_edge_from() {
+        let input = r#"flowchart TD
+    Start --> A[x = 1]
+    A --> End
+    B --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Undefined node 'B' referenced in edge from 'B' to 'End'"
+        );
+    }
+
+    #[test]
+    fn test_bare_reference_to_defined_node_is_ok() {
+        let input = r#"flowchart TD
+    Start --> A[x = 1]
+    A --> B{x > 0?}
+    B -->|Yes| A
+    B -->|No| End
+"#;
+        let result = parse(input);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_undefined_node_in_condition_edge() {
+        let input = r#"flowchart TD
+    Start --> A{x > 0?}
+    A -->|Yes| B
+    A -->|No| End
+"#;
+        let result = parse(input);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Undefined node 'B' referenced in edge from 'A' to 'B'"
         );
     }
 }

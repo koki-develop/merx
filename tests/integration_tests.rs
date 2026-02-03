@@ -465,6 +465,22 @@ mod invalid_flowcharts {
             err
         );
     }
+
+    #[test]
+    fn test_undefined_node_reference() {
+        let source = include_str!("fixtures/invalid/undefined_node.mmd");
+        let result = parser::parse(source);
+        assert!(
+            result.is_err(),
+            "Should fail when an edge references an undefined node"
+        );
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("Undefined node"),
+            "Error should mention undefined node: {}",
+            err
+        );
+    }
 }
 
 // =============================================================================
