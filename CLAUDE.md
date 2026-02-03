@@ -65,6 +65,8 @@ tests/
 └── fixtures/
     ├── valid/       # Valid .mmd files for testing successful execution
     └── invalid/     # Invalid .mmd files for testing error handling
+
+web/                             # VitePress documentation site (separate from Rust codebase)
 ```
 
 ### Parser
