@@ -219,22 +219,22 @@ pub enum UnaryOp {
 ///
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BinaryOp {
-    /// Addition (`+`).
+    /// Addition / concatenation (`+`).
     ///
-    /// Integer + Integer → Integer
+    /// - Integer + Integer → Integer (wrapping on overflow)
+    /// - String + String → String (concatenation)
     ///
-    /// Note: String concatenation is NOT supported. To build strings,
-    /// use explicit casting and multiple print statements.
+    /// Mixed-type operands (e.g., `int + str`) produce a runtime type error.
     Add,
 
     /// Subtraction (`-`).
     ///
-    /// Integer - Integer → Integer
+    /// Integer - Integer → Integer (wrapping on overflow)
     Sub,
 
     /// Multiplication (`*`).
     ///
-    /// Integer * Integer → Integer
+    /// Integer * Integer → Integer (wrapping on overflow)
     Mul,
 
     /// Division (`/`).

@@ -16,10 +16,15 @@
 //!
 //! # Operator Semantics
 //!
-//! ## Arithmetic (`+`, `-`, `*`, `/`, `%`)
+//! ## Addition / Concatenation (`+`)
+//!
+//! - `int + int` → `int` (wrapping addition)
+//! - `str + str` → `str` (concatenation)
+//!
+//! ## Arithmetic (`-`, `*`, `/`, `%`)
 //!
 //! - Operands must be integers
-//! - Addition, subtraction, and multiplication use wrapping semantics
+//! - Subtraction and multiplication use wrapping semantics
 //! - Division and modulo check for zero divisor
 //!
 //! ## Comparison (`<`, `<=`, `>`, `>=`)
@@ -261,8 +266,11 @@ fn eval_unary(op: UnaryOp, operand: Value) -> Result<Value, RuntimeError> {
 ///
 /// # Operator Categories
 ///
+/// ## Addition / Concatenation (`+`)
+/// - `int + int` → `int` (wrapping addition)
+/// - `str + str` → `str` (concatenation)
+///
 /// ## Arithmetic (requires `int` operands, returns `int`)
-/// - `+` Addition (wrapping)
 /// - `-` Subtraction (wrapping)
 /// - `*` Multiplication (wrapping)
 /// - `/` Division (truncating toward zero)
@@ -298,8 +306,29 @@ fn eval_unary(op: UnaryOp, operand: Value) -> Result<Value, RuntimeError> {
 /// - [`RuntimeError::DivisionByZero`] - Division or modulo by zero
 fn eval_binary(op: BinaryOp, left: Value, right: Value) -> Result<Value, RuntimeError> {
     match op {
+        // Addition: int + int → int, str + str → str
+        BinaryOp::Add => match (&left, &right) {
+            (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l.wrapping_add(*r))),
+            (Value::Str(l), Value::Str(r)) => Ok(Value::Str(format!("{}{}", l, r))),
+            (Value::Int(_), _) => Err(RuntimeError::TypeError {
+                expected: "int",
+                actual: right.type_name(),
+                operation: "addition (+)".to_string(),
+            }),
+            (Value::Str(_), _) => Err(RuntimeError::TypeError {
+                expected: "str",
+                actual: right.type_name(),
+                operation: "concatenation (+)".to_string(),
+            }),
+            _ => Err(RuntimeError::TypeError {
+                expected: "int or str",
+                actual: left.type_name(),
+                operation: "addition/concatenation (+)".to_string(),
+            }),
+        },
+
         // Arithmetic (int only)
-        BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
+        BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
             let l = left.as_int().ok_or_else(|| RuntimeError::TypeError {
                 expected: "int",
                 actual: left.type_name(),
@@ -311,7 +340,6 @@ fn eval_binary(op: BinaryOp, left: Value, right: Value) -> Result<Value, Runtime
                 operation: format!("{:?}", op),
             })?;
             let result = match op {
-                BinaryOp::Add => l.wrapping_add(r),
                 BinaryOp::Sub => l.wrapping_sub(r),
                 BinaryOp::Mul => l.wrapping_mul(r),
                 BinaryOp::Div => {
@@ -806,6 +834,23 @@ mod tests {
     }
 
     #[test]
+    fn test_eval_binary_add_str() {
+        let env = Environment::new();
+        let mut input = MockInputReader::new(vec![]);
+        let expr = Expr::Binary {
+            op: BinaryOp::Add,
+            left: Box::new(Expr::StrLit {
+                value: "foo".to_string(),
+            }),
+            right: Box::new(Expr::StrLit {
+                value: "bar".to_string(),
+            }),
+        };
+        let result = eval_expr(&expr, &env, &mut input).unwrap();
+        assert_eq!(result, Value::Str("foobar".to_string()));
+    }
+
+    #[test]
     fn test_eval_type_error_arithmetic() {
         let env = Environment::new();
         let mut input = MockInputReader::new(vec![]);
@@ -817,7 +862,56 @@ mod tests {
             }),
         };
         let result = eval_expr(&expr, &env, &mut input);
-        assert!(matches!(result, Err(RuntimeError::TypeError { .. })));
+        assert!(matches!(
+            result,
+            Err(RuntimeError::TypeError {
+                expected: "int",
+                actual: "str",
+                operation,
+            }) if operation == "addition (+)"
+        ));
+    }
+
+    #[test]
+    fn test_eval_type_error_add_str_plus_int() {
+        let env = Environment::new();
+        let mut input = MockInputReader::new(vec![]);
+        let expr = Expr::Binary {
+            op: BinaryOp::Add,
+            left: Box::new(Expr::StrLit {
+                value: "hello".to_string(),
+            }),
+            right: Box::new(Expr::IntLit { value: 1 }),
+        };
+        let result = eval_expr(&expr, &env, &mut input);
+        assert!(matches!(
+            result,
+            Err(RuntimeError::TypeError {
+                expected: "str",
+                actual: "int",
+                operation,
+            }) if operation == "concatenation (+)"
+        ));
+    }
+
+    #[test]
+    fn test_eval_type_error_add_bool() {
+        let env = Environment::new();
+        let mut input = MockInputReader::new(vec![]);
+        let expr = Expr::Binary {
+            op: BinaryOp::Add,
+            left: Box::new(Expr::BoolLit { value: true }),
+            right: Box::new(Expr::IntLit { value: 1 }),
+        };
+        let result = eval_expr(&expr, &env, &mut input);
+        assert!(matches!(
+            result,
+            Err(RuntimeError::TypeError {
+                expected: "int or str",
+                actual: "bool",
+                operation,
+            }) if operation == "addition/concatenation (+)"
+        ));
     }
 
     use crate::ast::{Node, Statement};

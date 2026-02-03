@@ -280,6 +280,49 @@ mod valid_flowcharts {
         assert_eq!(stdout, vec!["equal"]);
         assert!(stderr.is_empty());
     }
+
+    #[test]
+    fn test_string_concatenation() {
+        let source = include_str!("fixtures/valid/string_concatenation.mmd");
+        let (stdout, stderr) = run_flowchart(source).expect("Should execute successfully");
+
+        assert_eq!(stdout, vec!["Hello, World!", "test"]);
+        assert!(stderr.is_empty());
+    }
+
+    #[test]
+    fn test_string_concatenation_inline() {
+        let source = r#"flowchart TD
+    Start --> A[x = 'foo' + 'bar']
+    A --> B[println x]
+    B --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["foobar"]);
+    }
+
+    #[test]
+    fn test_string_concatenation_empty() {
+        let source = r#"flowchart TD
+    Start --> A[x = '' + '']
+    A --> B[println x]
+    B --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec![""]);
+    }
+
+    #[test]
+    fn test_string_concatenation_with_cast() {
+        let source = r#"flowchart TD
+    Start --> A[n = 42]
+    A --> B[msg = 'value: ' + (n as str)]
+    B --> C[println msg]
+    C --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["value: 42"]);
+    }
 }
 
 // =============================================================================
@@ -449,6 +492,16 @@ mod runtime_errors {
     fn test_type_error_arithmetic() {
         let source = r#"flowchart TD
     Start --> A[x = 'hello' + 1]
+    A --> End
+"#;
+        let result = run_flowchart(source);
+        assert!(result.is_err(), "Should fail with type error");
+    }
+
+    #[test]
+    fn test_type_error_int_plus_str() {
+        let source = r#"flowchart TD
+    Start --> A[x = 1 + 'hello']
     A --> End
 "#;
         let result = run_flowchart(source);

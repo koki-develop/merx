@@ -1,0 +1,9 @@
+flowchart TD
+    Start --> A[a = 'Hello']
+    A --> B[b = ', ']
+    B --> C[c = 'World!']
+    C --> D[msg = a + b + c]
+    D --> E[println msg]
+    E --> F[empty = '' + 'test']
+    F --> G[println empty]
+    G --> End
