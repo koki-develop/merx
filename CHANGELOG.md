@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.4](https://github.com/koki-develop/merx/compare/v0.0.3...v0.0.4) (2026-02-03)
+
+
+### Features
+
+* Add optional label support for Start/End nodes ([5473f89](https://github.com/koki-develop/merx/commit/5473f896b4b8956f2bedd57b205aa65d7dd77db7))
+* Release v0.0.4 ([5aefc78](https://github.com/koki-develop/merx/commit/5aefc78f00a9d4786dacf764add8fe970da07059))
+
 ## [0.0.3](https://github.com/koki-develop/merx/compare/v0.0.2...v0.0.3) (2026-02-03)
 
 
