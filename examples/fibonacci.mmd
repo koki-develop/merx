@@ -1,9 +1,9 @@
 flowchart TD
-    Start --> A[print 'Enter a positive integer: ']
+    Start([Start]) --> A[print 'Enter a positive integer: ']
     A --> B[n = input as int]
     B --> C{n <= 0?}
     C -->|Yes| D[error 'Input must be a positive integer']
-    D --> End
+    D --> End([End])
     C -->|No| E{n == 1?}
     E -->|Yes| F[println 0]
     F --> End

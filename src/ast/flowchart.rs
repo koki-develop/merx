@@ -156,7 +156,7 @@ mod tests {
     fn test_flowchart_serialize_minimal() {
         let flowchart = Flowchart {
             direction: Direction::Td,
-            nodes: vec![Node::Start, Node::End],
+            nodes: vec![Node::Start { label: None }, Node::End { label: None }],
             edges: vec![Edge {
                 from: "Start".to_string(),
                 to: "End".to_string(),
@@ -181,7 +181,7 @@ mod tests {
         let flowchart = Flowchart {
             direction: Direction::Lr,
             nodes: vec![
-                Node::Start,
+                Node::Start { label: None },
                 Node::Process {
                     id: "A".to_string(),
                     statements: vec![Statement::Assign {
@@ -207,7 +207,7 @@ mod tests {
                         },
                     }],
                 },
-                Node::End,
+                Node::End { label: None },
             ],
             edges: vec![
                 Edge {
@@ -268,7 +268,7 @@ mod tests {
     fn test_flowchart_serialize_with_custom_label() {
         let flowchart = Flowchart {
             direction: Direction::Td,
-            nodes: vec![Node::Start, Node::End],
+            nodes: vec![Node::Start { label: None }, Node::End { label: None }],
             edges: vec![Edge {
                 from: "Start".to_string(),
                 to: "End".to_string(),

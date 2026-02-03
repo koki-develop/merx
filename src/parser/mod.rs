@@ -417,8 +417,14 @@ fn parse_node_with_def(pair: Pair<Rule>) -> Result<Node, ParseError> {
     let inner = pair.into_inner().next().unwrap();
 
     match inner.as_rule() {
-        Rule::start_node => Ok(Node::Start),
-        Rule::end_node => Ok(Node::End),
+        Rule::start_node => {
+            let label = parse_stadium_label(&inner);
+            Ok(Node::Start { label })
+        }
+        Rule::end_node => {
+            let label = parse_stadium_label(&inner);
+            Ok(Node::End { label })
+        }
         Rule::process_node => {
             let mut parts = inner.into_inner();
             let id = parts.next().unwrap().as_str().to_string();
@@ -435,6 +441,27 @@ fn parse_node_with_def(pair: Pair<Rule>) -> Result<Node, ParseError> {
         }
         _ => unreachable!(),
     }
+}
+
+/// Parses the optional stadium label from a start or end node.
+///
+/// Stadium labels use the Mermaid syntax `([label text])` and provide
+/// a display name for Start and End nodes.
+///
+/// # Arguments
+///
+/// * `pair` - A pest [`Pair`] matching `start_node` or `end_node` rule
+///
+/// # Returns
+///
+/// `Some(String)` containing the label text if present, `None` otherwise.
+fn parse_stadium_label(pair: &Pair<Rule>) -> Option<String> {
+    for inner in pair.clone().into_inner() {
+        if inner.as_rule() == Rule::stadium_label {
+            return inner.into_inner().next().map(|p| p.as_str().to_string());
+        }
+    }
+    None
 }
 
 /// Parses a semicolon-separated list of statements.
@@ -1303,7 +1330,10 @@ mod tests {
         // Parser allows this - End node validation is done at runtime
         assert!(result.is_ok());
         let flowchart = result.unwrap();
-        let has_end = flowchart.nodes.iter().any(|n| matches!(n, Node::End));
+        let has_end = flowchart
+            .nodes
+            .iter()
+            .any(|n| matches!(n, Node::End { .. }));
         assert!(!has_end, "Should not have End node");
     }
 

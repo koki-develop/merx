@@ -201,8 +201,8 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
         for node in flowchart.nodes {
             let id = node.id().to_string();
             match &node {
-                Node::Start => start_count += 1,
-                Node::End => end_count += 1,
+                Node::Start { .. } => start_count += 1,
+                Node::End { .. } => end_count += 1,
                 _ => {}
             }
             nodes.insert(id, node);
@@ -284,11 +284,11 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
                 .clone();
 
             match &node {
-                Node::Start => {
+                Node::Start { .. } => {
                     // Move to the next node from Start
                     self.move_to_next()?;
                 }
-                Node::End => {
+                Node::End { .. } => {
                     // Terminate
                     return Ok(());
                 }
@@ -474,7 +474,7 @@ mod tests {
         Flowchart {
             direction: Direction::Td,
             nodes: vec![
-                Node::Start,
+                Node::Start { label: None },
                 Node::Process {
                     id: "A".to_string(),
                     statements: vec![Statement::Println {
@@ -483,7 +483,7 @@ mod tests {
                         },
                     }],
                 },
-                Node::End,
+                Node::End { label: None },
             ],
             edges: vec![
                 Edge {
@@ -507,7 +507,7 @@ mod tests {
         Flowchart {
             direction: Direction::Td,
             nodes: vec![
-                Node::Start,
+                Node::Start { label: None },
                 Node::Process {
                     id: "A".to_string(),
                     statements: vec![Statement::Assign {
@@ -541,7 +541,7 @@ mod tests {
                         },
                     }],
                 },
-                Node::End,
+                Node::End { label: None },
             ],
             edges: vec![
                 Edge {
@@ -606,7 +606,7 @@ mod tests {
     fn test_missing_start_node() {
         let flowchart = Flowchart {
             direction: Direction::Td,
-            nodes: vec![Node::End],
+            nodes: vec![Node::End { label: None }],
             edges: vec![],
         };
         let input = MockInputReader::new(vec![]);
@@ -620,7 +620,7 @@ mod tests {
     fn test_missing_end_node() {
         let flowchart = Flowchart {
             direction: Direction::Td,
-            nodes: vec![Node::Start],
+            nodes: vec![Node::Start { label: None }],
             edges: vec![],
         };
         let input = MockInputReader::new(vec![]);
@@ -634,7 +634,7 @@ mod tests {
     fn test_no_outgoing_edge() {
         let flowchart = Flowchart {
             direction: Direction::Td,
-            nodes: vec![Node::Start, Node::End],
+            nodes: vec![Node::Start { label: None }, Node::End { label: None }],
             edges: vec![], // No edge from Start
         };
         let input = MockInputReader::new(vec![]);
@@ -651,7 +651,7 @@ mod tests {
         let flowchart = Flowchart {
             direction: Direction::Td,
             nodes: vec![
-                Node::Start,
+                Node::Start { label: None },
                 Node::Process {
                     id: "A".to_string(),
                     statements: vec![Statement::Error {
@@ -660,7 +660,7 @@ mod tests {
                         },
                     }],
                 },
-                Node::End,
+                Node::End { label: None },
             ],
             edges: vec![
                 Edge {
@@ -693,7 +693,7 @@ mod tests {
         let flowchart = Flowchart {
             direction: Direction::Td,
             nodes: vec![
-                Node::Start,
+                Node::Start { label: None },
                 Node::Process {
                     id: "A".to_string(),
                     statements: vec![Statement::Assign {
@@ -731,7 +731,7 @@ mod tests {
                         },
                     ],
                 },
-                Node::End,
+                Node::End { label: None },
             ],
             edges: vec![
                 Edge {
@@ -776,12 +776,12 @@ mod tests {
         let flowchart = Flowchart {
             direction: Direction::Td,
             nodes: vec![
-                Node::Start,
+                Node::Start { label: None },
                 Node::Condition {
                     id: "A".to_string(),
                     condition: Expr::IntLit { value: 42 },
                 },
-                Node::End,
+                Node::End { label: None },
             ],
             edges: vec![
                 Edge {
@@ -818,12 +818,12 @@ mod tests {
         let flowchart = Flowchart {
             direction: Direction::Td,
             nodes: vec![
-                Node::Start,
+                Node::Start { label: None },
                 Node::Condition {
                     id: "A".to_string(),
                     condition: Expr::BoolLit { value: true },
                 },
-                Node::End,
+                Node::End { label: None },
             ],
             edges: vec![
                 Edge {
@@ -859,12 +859,12 @@ mod tests {
         let flowchart = Flowchart {
             direction: Direction::Td,
             nodes: vec![
-                Node::Start,
+                Node::Start { label: None },
                 Node::Condition {
                     id: "A".to_string(),
                     condition: Expr::BoolLit { value: false },
                 },
-                Node::End,
+                Node::End { label: None },
             ],
             edges: vec![
                 Edge {
@@ -899,7 +899,7 @@ mod tests {
         // Start --> NonExistent (node doesn't exist)
         let flowchart = Flowchart {
             direction: Direction::Td,
-            nodes: vec![Node::Start, Node::End],
+            nodes: vec![Node::Start { label: None }, Node::End { label: None }],
             edges: vec![Edge {
                 from: "Start".to_string(),
                 to: "NonExistent".to_string(),
@@ -927,7 +927,7 @@ mod tests {
         let flowchart = Flowchart {
             direction: Direction::Td,
             nodes: vec![
-                Node::Start,
+                Node::Start { label: None },
                 Node::Process {
                     id: "Init".to_string(),
                     statements: vec![Statement::Assign {
@@ -979,7 +979,7 @@ mod tests {
                         },
                     }],
                 },
-                Node::End,
+                Node::End { label: None },
             ],
             edges: vec![
                 Edge {
@@ -1052,7 +1052,7 @@ mod tests {
         let flowchart = Flowchart {
             direction: Direction::Td,
             nodes: vec![
-                Node::Start,
+                Node::Start { label: None },
                 Node::Process {
                     id: "Init".to_string(),
                     statements: vec![Statement::Assign {
@@ -1140,7 +1140,7 @@ mod tests {
                         },
                     }],
                 },
-                Node::End,
+                Node::End { label: None },
             ],
             edges: vec![
                 Edge {

@@ -16,8 +16,8 @@ Merx is an interpreter that executes programs written in Mermaid flowchart synta
 ```mermaid
 %% hello.mmd
 flowchart TD
-    Start --> A[print 'Hello, merx!']
-    A --> End
+    Start([Start]) --> A[println 'Hello, merx!']
+    A --> End([End])
 ```
 
 ```console

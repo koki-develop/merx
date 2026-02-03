@@ -55,8 +55,14 @@ pub enum Node {
     ///
     /// ```text
     /// Start --> NextNode
+    /// Start([Begin]) --> NextNode
     /// ```
-    Start,
+    Start {
+        /// Optional display label for documentation purposes.
+        /// Does not affect execution.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
 
     /// An exit point of the flowchart.
     ///
@@ -67,8 +73,14 @@ pub enum Node {
     ///
     /// ```text
     /// PreviousNode --> End
+    /// PreviousNode --> End([Finish])
     /// ```
-    End,
+    End {
+        /// Optional display label for documentation purposes.
+        /// Does not affect execution.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
 
     /// A processing node that executes a sequence of statements.
     ///
@@ -142,13 +154,13 @@ impl Node {
     /// ```
     /// use merx::ast::Node;
     ///
-    /// assert_eq!(Node::Start.id(), "Start");
-    /// assert_eq!(Node::End.id(), "End");
+    /// assert_eq!(Node::Start { label: None }.id(), "Start");
+    /// assert_eq!(Node::End { label: None }.id(), "End");
     /// ```
     pub fn id(&self) -> &str {
         match self {
-            Node::Start => "Start",
-            Node::End => "End",
+            Node::Start { .. } => "Start",
+            Node::End { .. } => "End",
             Node::Process { id, .. } => id,
             Node::Condition { id, .. } => id,
         }
@@ -162,22 +174,46 @@ mod tests {
 
     #[test]
     fn test_node_serialize_start() {
-        let node = Node::Start;
+        let node = Node::Start { label: None };
         let json = serde_json::to_value(&node).unwrap();
 
         assert_eq!(json["type"], "start");
-        // Start node has no other fields
+        // Start node without label has no other fields
         assert!(json.get("id").is_none());
+        assert!(json.get("label").is_none());
+    }
+
+    #[test]
+    fn test_node_serialize_start_with_label() {
+        let node = Node::Start {
+            label: Some("Begin".to_string()),
+        };
+        let json = serde_json::to_value(&node).unwrap();
+
+        assert_eq!(json["type"], "start");
+        assert_eq!(json["label"], "Begin");
     }
 
     #[test]
     fn test_node_serialize_end() {
-        let node = Node::End;
+        let node = Node::End { label: None };
         let json = serde_json::to_value(&node).unwrap();
 
         assert_eq!(json["type"], "end");
-        // End node has no other fields
+        // End node without label has no other fields
         assert!(json.get("id").is_none());
+        assert!(json.get("label").is_none());
+    }
+
+    #[test]
+    fn test_node_serialize_end_with_label() {
+        let node = Node::End {
+            label: Some("Finish".to_string()),
+        };
+        let json = serde_json::to_value(&node).unwrap();
+
+        assert_eq!(json["type"], "end");
+        assert_eq!(json["label"], "Finish");
     }
 
     #[test]
