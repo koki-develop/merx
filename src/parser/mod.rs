@@ -310,18 +310,27 @@ struct ParsedLine {
 ///
 /// Returns [`ParseError`] if node parsing fails.
 fn parse_line(pair: Pair<Rule>) -> Result<ParsedLine, ParseError> {
-    let edge_def = pair.into_inner().next().unwrap();
+    let edge_def = pair
+        .into_inner()
+        .next()
+        .ok_or_else(|| ParseError::new("internal: expected edge_def in line"))?;
     let mut inner = edge_def.into_inner();
 
-    let from_pair = inner.next().unwrap();
+    let from_pair = inner
+        .next()
+        .ok_or_else(|| ParseError::new("internal: expected from_pair in edge_def"))?;
     let (from_id, from_node) = parse_node_ref(from_pair)?;
 
     let mut label = None;
-    let mut to_pair = inner.next().unwrap();
+    let mut to_pair = inner
+        .next()
+        .ok_or_else(|| ParseError::new("internal: expected to_pair in edge_def"))?;
 
     if to_pair.as_rule() == Rule::edge_label {
-        label = Some(parse_edge_label(to_pair));
-        to_pair = inner.next().unwrap();
+        label = Some(parse_edge_label(to_pair)?);
+        to_pair = inner
+            .next()
+            .ok_or_else(|| ParseError::new("internal: expected to_pair after edge_label"))?;
     }
 
     let (to_id, to_node) = parse_node_ref(to_pair)?;
@@ -350,13 +359,17 @@ fn parse_line(pair: Pair<Rule>) -> Result<ParsedLine, ParseError> {
 /// - [`EdgeLabel::Yes`] for "yes" (case-insensitive)
 /// - [`EdgeLabel::No`] for "no" (case-insensitive)
 /// - [`EdgeLabel::Custom`] for any other text
-fn parse_edge_label(pair: Pair<Rule>) -> EdgeLabel {
-    let label_text = pair.into_inner().next().unwrap().as_str();
-    match label_text.to_lowercase().as_str() {
+fn parse_edge_label(pair: Pair<Rule>) -> Result<EdgeLabel, ParseError> {
+    let label_text = pair
+        .into_inner()
+        .next()
+        .ok_or_else(|| ParseError::new("internal: expected label_text in edge_label"))?
+        .as_str();
+    Ok(match label_text.to_lowercase().as_str() {
         "yes" => EdgeLabel::Yes,
         "no" => EdgeLabel::No,
         _ => EdgeLabel::Custom(label_text.to_string()),
-    }
+    })
 }
 
 /// Parses a node reference, which may be a full definition or a bare identifier.
@@ -378,7 +391,10 @@ fn parse_edge_label(pair: Pair<Rule>) -> EdgeLabel {
 ///
 /// Returns [`ParseError`] if the node definition cannot be parsed.
 fn parse_node_ref(pair: Pair<Rule>) -> Result<(String, Option<Node>), ParseError> {
-    let inner = pair.into_inner().next().unwrap();
+    let inner = pair
+        .into_inner()
+        .next()
+        .ok_or_else(|| ParseError::new("internal: expected inner in node_ref"))?;
 
     match inner.as_rule() {
         Rule::node_with_def => {
@@ -414,7 +430,10 @@ fn parse_node_ref(pair: Pair<Rule>) -> Result<(String, Option<Node>), ParseError
 ///
 /// Returns [`ParseError`] if statement or expression parsing fails.
 fn parse_node_with_def(pair: Pair<Rule>) -> Result<Node, ParseError> {
-    let inner = pair.into_inner().next().unwrap();
+    let inner = pair
+        .into_inner()
+        .next()
+        .ok_or_else(|| ParseError::new("internal: expected inner in node_with_def"))?;
 
     match inner.as_rule() {
         Rule::start_node => {
@@ -427,15 +446,27 @@ fn parse_node_with_def(pair: Pair<Rule>) -> Result<Node, ParseError> {
         }
         Rule::process_node => {
             let mut parts = inner.into_inner();
-            let id = parts.next().unwrap().as_str().to_string();
-            let statements_pair = parts.next().unwrap();
+            let id = parts
+                .next()
+                .ok_or_else(|| ParseError::new("internal: expected id in process_node"))?
+                .as_str()
+                .to_string();
+            let statements_pair = parts
+                .next()
+                .ok_or_else(|| ParseError::new("internal: expected statements in process_node"))?;
             let statements = parse_statements(statements_pair)?;
             Ok(Node::Process { id, statements })
         }
         Rule::condition_node => {
             let mut parts = inner.into_inner();
-            let id = parts.next().unwrap().as_str().to_string();
-            let expr_pair = parts.next().unwrap();
+            let id = parts
+                .next()
+                .ok_or_else(|| ParseError::new("internal: expected id in condition_node"))?
+                .as_str()
+                .to_string();
+            let expr_pair = parts
+                .next()
+                .ok_or_else(|| ParseError::new("internal: expected expr in condition_node"))?;
             let condition = parse_expression(expr_pair)?;
             Ok(Node::Condition { id, condition })
         }
@@ -512,28 +543,48 @@ fn parse_statements(pair: Pair<Rule>) -> Result<Vec<Statement>, ParseError> {
 ///
 /// Returns [`ParseError`] if the expression within the statement cannot be parsed.
 fn parse_statement(pair: Pair<Rule>) -> Result<Statement, ParseError> {
-    let inner = pair.into_inner().next().unwrap();
+    let inner = pair
+        .into_inner()
+        .next()
+        .ok_or_else(|| ParseError::new("internal: expected inner in statement"))?;
 
     match inner.as_rule() {
         Rule::println_stmt => {
-            let expr_pair = inner.into_inner().next().unwrap();
+            let expr_pair = inner
+                .into_inner()
+                .next()
+                .ok_or_else(|| ParseError::new("internal: expected expr in println_stmt"))?;
             let expr = parse_expression(expr_pair)?;
             Ok(Statement::Println { expr })
         }
         Rule::print_stmt => {
-            let expr_pair = inner.into_inner().next().unwrap();
+            let expr_pair = inner
+                .into_inner()
+                .next()
+                .ok_or_else(|| ParseError::new("internal: expected expr in print_stmt"))?;
             let expr = parse_expression(expr_pair)?;
             Ok(Statement::Print { expr })
         }
         Rule::error_stmt => {
-            let expr_pair = inner.into_inner().next().unwrap();
+            let expr_pair = inner
+                .into_inner()
+                .next()
+                .ok_or_else(|| ParseError::new("internal: expected expr in error_stmt"))?;
             let message = parse_expression(expr_pair)?;
             Ok(Statement::Error { message })
         }
         Rule::assign_stmt => {
             let mut parts = inner.into_inner();
-            let variable = parts.next().unwrap().as_str().to_string();
-            let value = parse_expression(parts.next().unwrap())?;
+            let variable = parts
+                .next()
+                .ok_or_else(|| ParseError::new("internal: expected variable in assign_stmt"))?
+                .as_str()
+                .to_string();
+            let value = parse_expression(
+                parts
+                    .next()
+                    .ok_or_else(|| ParseError::new("internal: expected value in assign_stmt"))?,
+            )?;
             Ok(Statement::Assign { variable, value })
         }
         _ => unreachable!(),
@@ -728,7 +779,8 @@ fn parse_unary_expr(pair: Pair<Rule>) -> Result<Expr, ParseError> {
         }
     }
 
-    let mut expr = cast_expr.unwrap();
+    let mut expr =
+        cast_expr.ok_or_else(|| ParseError::new("internal: expected cast_expr in unary_expr"))?;
 
     // Apply unary operators in reverse order
     for op in unary_ops.into_iter().rev() {
@@ -786,7 +838,7 @@ fn parse_cast_expr(pair: Pair<Rule>) -> Result<Expr, ParseError> {
         }
     }
 
-    let mut result = expr.unwrap();
+    let mut result = expr.ok_or_else(|| ParseError::new("internal: expected expr in cast_expr"))?;
 
     if let Some(t) = target_type {
         result = Expr::Cast {
@@ -820,7 +872,10 @@ fn parse_cast_expr(pair: Pair<Rule>) -> Result<Expr, ParseError> {
 ///
 /// Returns [`ParseError`] if a nested expression cannot be parsed.
 fn parse_primary(pair: Pair<Rule>) -> Result<Expr, ParseError> {
-    let inner = pair.into_inner().next().unwrap();
+    let inner = pair
+        .into_inner()
+        .next()
+        .ok_or_else(|| ParseError::new("internal: expected inner in primary"))?;
 
     match inner.as_rule() {
         Rule::expression => parse_expression(inner),
@@ -828,15 +883,20 @@ fn parse_primary(pair: Pair<Rule>) -> Result<Expr, ParseError> {
         Rule::bool_lit => Ok(Expr::BoolLit {
             value: inner.as_str() == "true",
         }),
-        Rule::int_lit => Ok(Expr::IntLit {
-            value: inner.as_str().parse().unwrap(),
-        }),
+        Rule::int_lit => {
+            let s = inner.as_str();
+            Ok(Expr::IntLit {
+                value: s.parse::<i64>().map_err(|_| {
+                    ParseError::new(format!("integer literal '{}' is out of range", s))
+                })?,
+            })
+        }
         Rule::string_lit => {
             let s = inner.as_str();
             // Remove surrounding quotes
             let content = &s[1..s.len() - 1];
             Ok(Expr::StrLit {
-                value: unescape_string(content),
+                value: unescape_string(content)?,
             })
         }
         Rule::identifier => Ok(Expr::Variable {
@@ -850,39 +910,56 @@ fn parse_primary(pair: Pair<Rule>) -> Result<Expr, ParseError> {
 ///
 /// Supports: `\\'`, `\\\\`, `\\n`, `\\t`, `\\r`, `\\0`, `\\xHH`.
 /// The grammar guarantees that only valid escape sequences reach this function.
-fn unescape_string(raw: &str) -> String {
+fn unescape_string(raw: &str) -> Result<String, ParseError> {
     let mut result = String::with_capacity(raw.len());
     let mut chars = raw.chars();
 
     while let Some(c) = chars.next() {
         if c == '\\' {
-            // Grammar guarantees: first `\` is always followed by a second `\`,
-            // then a valid escape specifier.
-            chars.next(); // consume the second `\`
-            match chars.next() {
-                Some('\'') => result.push('\''),
-                Some('\\') => {
-                    chars.next(); // consume the fourth `\`
+            chars
+                .next()
+                .ok_or_else(|| ParseError::new("internal: truncated escape sequence"))?;
+            let specifier = chars
+                .next()
+                .ok_or_else(|| ParseError::new("internal: truncated escape sequence"))?;
+            match specifier {
+                '\'' => result.push('\''),
+                '\\' => {
+                    chars
+                        .next()
+                        .ok_or_else(|| ParseError::new("internal: truncated backslash escape"))?;
                     result.push('\\');
                     result.push('\\');
                 }
-                Some('n') => result.push('\n'),
-                Some('t') => result.push('\t'),
-                Some('r') => result.push('\r'),
-                Some('0') => result.push('\0'),
-                Some('x') => {
-                    let h1 = chars.next().unwrap().to_digit(16).unwrap() as u8;
-                    let h2 = chars.next().unwrap().to_digit(16).unwrap() as u8;
+                'n' => result.push('\n'),
+                't' => result.push('\t'),
+                'r' => result.push('\r'),
+                '0' => result.push('\0'),
+                'x' => {
+                    let h1 = chars
+                        .next()
+                        .and_then(|c| c.to_digit(16))
+                        .ok_or_else(|| ParseError::new("internal: invalid hex escape"))?
+                        as u8;
+                    let h2 = chars
+                        .next()
+                        .and_then(|c| c.to_digit(16))
+                        .ok_or_else(|| ParseError::new("internal: invalid hex escape"))?
+                        as u8;
                     result.push((h1 * 16 + h2) as char);
                 }
-                _ => unreachable!("grammar guarantees valid escape sequence"),
+                _ => {
+                    return Err(ParseError::new(
+                        "internal: unexpected escape specifier in string",
+                    ));
+                }
             }
         } else {
             result.push(c);
         }
     }
 
-    result
+    Ok(result)
 }
 
 /// Converts a binary operator token into a [`BinaryOp`] enum value.
@@ -1734,36 +1811,36 @@ flowchart TD
 
     #[test]
     fn test_unescape_string_empty() {
-        assert_eq!(unescape_string(""), "");
+        assert_eq!(unescape_string("").unwrap(), "");
     }
 
     #[test]
     fn test_unescape_string_no_escapes() {
-        assert_eq!(unescape_string("hello world"), "hello world");
+        assert_eq!(unescape_string("hello world").unwrap(), "hello world");
     }
 
     #[test]
     fn test_unescape_string_escaped_quote() {
         // \\' in raw content (2 backslashes + quote) → '
-        assert_eq!(unescape_string("\\\\'"), "'");
+        assert_eq!(unescape_string("\\\\'").unwrap(), "'");
     }
 
     #[test]
     fn test_unescape_string_escaped_backslash() {
         // \\\\ in raw content (4 backslashes) → \\ (2 backslashes)
-        assert_eq!(unescape_string("\\\\\\\\"), "\\\\");
+        assert_eq!(unescape_string("\\\\\\\\").unwrap(), "\\\\");
     }
 
     #[test]
     fn test_unescape_string_mixed() {
         // hello + \\' + world → hello'world
-        assert_eq!(unescape_string("hello\\\\'world"), "hello'world");
+        assert_eq!(unescape_string("hello\\\\'world").unwrap(), "hello'world");
     }
 
     #[test]
     fn test_unescape_string_multiple_escapes() {
         // \\' + space + \\\\ → ' + space + \\
-        assert_eq!(unescape_string("\\\\' \\\\\\\\"), "' \\\\");
+        assert_eq!(unescape_string("\\\\' \\\\\\\\").unwrap(), "' \\\\");
     }
 
     /// Parses a flowchart and extracts the string value from the first Println statement.
@@ -1838,62 +1915,62 @@ flowchart TD
 
     #[test]
     fn test_unescape_string_newline() {
-        assert_eq!(unescape_string("\\\\n"), "\n");
+        assert_eq!(unescape_string("\\\\n").unwrap(), "\n");
     }
 
     #[test]
     fn test_unescape_string_tab() {
-        assert_eq!(unescape_string("\\\\t"), "\t");
+        assert_eq!(unescape_string("\\\\t").unwrap(), "\t");
     }
 
     #[test]
     fn test_unescape_string_carriage_return() {
-        assert_eq!(unescape_string("\\\\r"), "\r");
+        assert_eq!(unescape_string("\\\\r").unwrap(), "\r");
     }
 
     #[test]
     fn test_unescape_string_null() {
-        assert_eq!(unescape_string("\\\\0"), "\0");
+        assert_eq!(unescape_string("\\\\0").unwrap(), "\0");
     }
 
     #[test]
     fn test_unescape_string_hex_uppercase() {
         // \\x41 -> 'A'
-        assert_eq!(unescape_string("\\\\x41"), "A");
+        assert_eq!(unescape_string("\\\\x41").unwrap(), "A");
     }
 
     #[test]
     fn test_unescape_string_hex_lowercase() {
         // \\x0a -> newline
-        assert_eq!(unescape_string("\\\\x0a"), "\n");
+        assert_eq!(unescape_string("\\\\x0a").unwrap(), "\n");
     }
 
     #[test]
     fn test_unescape_string_hex_mixed_case() {
         // \\x0A -> newline
-        assert_eq!(unescape_string("\\\\x0A"), "\n");
+        assert_eq!(unescape_string("\\\\x0A").unwrap(), "\n");
     }
 
     #[test]
     fn test_unescape_string_multiple_new_escapes() {
-        assert_eq!(unescape_string("hello\\\\nworld"), "hello\nworld");
+        assert_eq!(unescape_string("hello\\\\nworld").unwrap(), "hello\nworld");
     }
 
     #[test]
     fn test_unescape_string_all_escapes_combined() {
-        assert_eq!(unescape_string("\\\\n\\\\t\\\\r\\\\0"), "\n\t\r\0");
+        assert_eq!(unescape_string("\\\\n\\\\t\\\\r\\\\0").unwrap(), "\n\t\r\0");
     }
 
     #[test]
     fn test_unescape_string_hex_high_value() {
         // \\xFF -> U+00FF
-        assert_eq!(unescape_string("\\\\xFF"), "\u{FF}");
+        assert_eq!(unescape_string("\\\\xFF").unwrap(), "\u{FF}");
     }
 
     #[test]
     fn test_unescape_string_hex_zero() {
         // \\x00 -> null (same as \\0)
-        assert_eq!(unescape_string("\\\\x00"), "\0");
+        assert_eq!(unescape_string("\\\\x00").unwrap(), "\0");
     }
 
     #[test]

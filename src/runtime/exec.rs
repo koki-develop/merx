@@ -101,7 +101,7 @@ impl OutputWriter for StdioWriter {
     fn write_stdout_no_newline(&mut self, s: &str) {
         use std::io::{Write, stdout};
         print!("{}", s);
-        stdout().flush().unwrap();
+        let _ = stdout().flush();
     }
 
     fn write_stderr(&mut self, s: &str) {
