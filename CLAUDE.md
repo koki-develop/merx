@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-merx is an interpreter for programs written in Mermaid flowchart syntax. It parses `.mmd` files containing Mermaid flowchart definitions and executes them as programs. The language supports variables, arithmetic/comparison/logical operators, type casting, input/output, and conditional branching.
+merx is an interpreter for programs written in Mermaid flowchart syntax. It parses `.mmd` files containing Mermaid flowchart definitions and executes them as programs. The language supports variables, arithmetic/comparison/logical operators, type casting, input/output, conditional branching, and escape sequences in string literals.
 
 ## Build and Run Commands
 
@@ -58,6 +58,8 @@ src/
     ├── exec.rs      # Statement execution
     └── interpreter.rs # Interpreter main loop
 
+examples/                        # Example .mmd programs (fibonacci, fizzbuzz, hello)
+
 tests/
 ├── integration_tests.rs  # Integration tests for the interpreter
 └── fixtures/
@@ -71,6 +73,8 @@ tests/
 - Entry point: `parser::parse(&str) -> Result<Flowchart, ParseError>`
 - Handles operator precedence manually in code (see `build_expr_with_precedence`)
 - Validates that condition nodes have exactly one `Yes` and one `No` edge
+- Validates Start and End node existence at parse time
+- Detects duplicate node definitions at parse time
 
 ### AST
 
