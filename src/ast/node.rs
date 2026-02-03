@@ -3,8 +3,6 @@
 //! Nodes are the fundamental building blocks of a Mermaid flowchart. Each node
 //! represents a point in the program's control flow.
 
-use serde::Serialize;
-
 use super::{Expr, Statement};
 
 /// A node in the flowchart representing a point in program execution.
@@ -32,18 +30,7 @@ use super::{Expr, Statement};
 ///     C --> End                    // End node
 /// ```
 ///
-/// # Serialization
-///
-/// Uses tagged enum serialization with `"type"` discriminator:
-///
-/// ```json
-/// { "type": "process", "id": "A", "statements": [...] }
-/// { "type": "condition", "id": "B", "condition": {...} }
-/// { "type": "start" }
-/// { "type": "end" }
-/// ```
-#[derive(Debug, Clone, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Node {
     /// The entry point of the flowchart.
     ///
@@ -60,7 +47,6 @@ pub enum Node {
     Start {
         /// Optional display label for documentation purposes.
         /// Does not affect execution.
-        #[serde(skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
 
@@ -78,7 +64,6 @@ pub enum Node {
     End {
         /// Optional display label for documentation purposes.
         /// Does not affect execution.
-        #[serde(skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
 
@@ -164,146 +149,5 @@ impl Node {
             Node::Process { id, .. } => id,
             Node::Condition { id, .. } => id,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ast::{BinaryOp, Expr};
-
-    #[test]
-    fn test_node_serialize_start() {
-        let node = Node::Start { label: None };
-        let json = serde_json::to_value(&node).unwrap();
-
-        assert_eq!(json["type"], "start");
-        // Start node without label has no other fields
-        assert!(json.get("id").is_none());
-        assert!(json.get("label").is_none());
-    }
-
-    #[test]
-    fn test_node_serialize_start_with_label() {
-        let node = Node::Start {
-            label: Some("Begin".to_string()),
-        };
-        let json = serde_json::to_value(&node).unwrap();
-
-        assert_eq!(json["type"], "start");
-        assert_eq!(json["label"], "Begin");
-    }
-
-    #[test]
-    fn test_node_serialize_end() {
-        let node = Node::End { label: None };
-        let json = serde_json::to_value(&node).unwrap();
-
-        assert_eq!(json["type"], "end");
-        // End node without label has no other fields
-        assert!(json.get("id").is_none());
-        assert!(json.get("label").is_none());
-    }
-
-    #[test]
-    fn test_node_serialize_end_with_label() {
-        let node = Node::End {
-            label: Some("Finish".to_string()),
-        };
-        let json = serde_json::to_value(&node).unwrap();
-
-        assert_eq!(json["type"], "end");
-        assert_eq!(json["label"], "Finish");
-    }
-
-    #[test]
-    fn test_node_serialize_process() {
-        let node = Node::Process {
-            id: "A".to_string(),
-            statements: vec![Statement::Println {
-                expr: Expr::StrLit {
-                    value: "hello".to_string(),
-                },
-            }],
-        };
-        let json = serde_json::to_value(&node).unwrap();
-
-        assert_eq!(json["type"], "process");
-        assert_eq!(json["id"], "A");
-        assert!(json["statements"].is_array());
-        assert_eq!(json["statements"].as_array().unwrap().len(), 1);
-        assert_eq!(json["statements"][0]["type"], "println");
-    }
-
-    #[test]
-    fn test_node_serialize_process_multiple_statements() {
-        let node = Node::Process {
-            id: "B".to_string(),
-            statements: vec![
-                Statement::Assign {
-                    variable: "x".to_string(),
-                    value: Expr::IntLit { value: 5 },
-                },
-                Statement::Println {
-                    expr: Expr::Variable {
-                        name: "x".to_string(),
-                    },
-                },
-            ],
-        };
-        let json = serde_json::to_value(&node).unwrap();
-
-        assert_eq!(json["type"], "process");
-        assert_eq!(json["id"], "B");
-        assert_eq!(json["statements"].as_array().unwrap().len(), 2);
-        assert_eq!(json["statements"][0]["type"], "assign");
-        assert_eq!(json["statements"][1]["type"], "println");
-    }
-
-    #[test]
-    fn test_node_serialize_process_empty_statements() {
-        let node = Node::Process {
-            id: "Empty".to_string(),
-            statements: vec![],
-        };
-        let json = serde_json::to_value(&node).unwrap();
-
-        assert_eq!(json["type"], "process");
-        assert_eq!(json["id"], "Empty");
-        assert!(json["statements"].as_array().unwrap().is_empty());
-    }
-
-    #[test]
-    fn test_node_serialize_condition() {
-        let node = Node::Condition {
-            id: "C".to_string(),
-            condition: Expr::Binary {
-                op: BinaryOp::Gt,
-                left: Box::new(Expr::Variable {
-                    name: "x".to_string(),
-                }),
-                right: Box::new(Expr::IntLit { value: 0 }),
-            },
-        };
-        let json = serde_json::to_value(&node).unwrap();
-
-        assert_eq!(json["type"], "condition");
-        assert_eq!(json["id"], "C");
-        assert_eq!(json["condition"]["type"], "binary");
-        assert_eq!(json["condition"]["op"], "gt");
-    }
-
-    #[test]
-    fn test_node_serialize_condition_simple() {
-        let node = Node::Condition {
-            id: "D".to_string(),
-            condition: Expr::BoolLit { value: true },
-        };
-        let json = serde_json::to_value(&node).unwrap();
-
-        assert_eq!(json["type"], "condition");
-        assert_eq!(json["id"], "D");
-        assert_eq!(json["condition"]["type"], "bool_lit");
-        assert_eq!(json["condition"]["value"], true);
     }
 }

@@ -3,8 +3,6 @@
 //! Edges define the control flow between nodes in a Mermaid flowchart. They
 //! specify which node to visit next after completing the current node's execution.
 
-use serde::Serialize;
-
 /// A directed connection between two nodes in the flowchart.
 ///
 /// Edges define the control flow path through the program. Each edge connects
@@ -25,15 +23,7 @@ use serde::Serialize;
 /// nodes. Each condition node must have exactly one `Yes` edge and one `No` edge.
 /// Labels are optional (and typically omitted) for edges from other node types.
 ///
-/// # Serialization
-///
-/// The `label` field is omitted from JSON output when `None`:
-///
-/// ```json
-/// { "from": "A", "to": "B" }
-/// { "from": "C", "to": "D", "label": "yes" }
-/// ```
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Edge {
     /// The identifier of the source node.
     ///
@@ -50,7 +40,6 @@ pub struct Edge {
     /// Required for edges from condition nodes; should be [`EdgeLabel::Yes`]
     /// or [`EdgeLabel::No`]. Custom labels are allowed but have no special
     /// meaning to the interpreter.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub label: Option<EdgeLabel>,
 }
 
@@ -68,13 +57,7 @@ pub struct Edge {
 /// A -->|custom| D   // Custom label (not used for branching)
 /// ```
 ///
-/// # Serialization
-///
-/// - `Yes` serializes to `"yes"`
-/// - `No` serializes to `"no"`
-/// - `Custom` serializes to its string value directly (untagged)
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, PartialEq)]
 pub enum EdgeLabel {
     /// The "Yes" branch for true conditions.
     ///
@@ -91,7 +74,6 @@ pub enum EdgeLabel {
     /// Custom labels are parsed but have no special meaning to the interpreter.
     /// They may be used for documentation or visual purposes in the Mermaid
     /// diagram.
-    #[serde(untagged)]
     Custom(String),
 }
 

@@ -80,8 +80,6 @@ tests/
 - `Expr`: Expression tree supporting literals, variables, binary/unary ops, casts, and `input`
 - `Statement`: `Println`, `Print`, `Error`, or `Assign`
 
-All AST types derive `Serialize` for JSON output.
-
 ### Runtime
 
 - Entry point: `runtime::Interpreter::new(Flowchart) -> Result<Interpreter, RuntimeError>`

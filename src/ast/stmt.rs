@@ -4,8 +4,6 @@
 //! expressions which produce values, statements perform actions like outputting
 //! text, signaling errors, or storing values in variables.
 
-use serde::Serialize;
-
 use super::Expr;
 
 /// An executable statement within a process node.
@@ -30,18 +28,7 @@ use super::Expr;
 /// C[error 'Invalid input']      // Signal an error
 /// ```
 ///
-/// # Serialization
-///
-/// Uses tagged enum serialization with `"type"` discriminator:
-///
-/// ```json
-/// { "type": "assign", "variable": "x", "value": {...} }
-/// { "type": "println", "expr": {...} }
-/// { "type": "print", "expr": {...} }
-/// { "type": "error", "message": {...} }
-/// ```
-#[derive(Debug, Clone, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
     /// Assign a value to a variable.
     ///
@@ -133,127 +120,4 @@ pub enum Statement {
         /// The expression to evaluate and display as an error message.
         message: Expr,
     },
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ast::{BinaryOp, TypeName};
-
-    #[test]
-    fn test_statement_serialize_println() {
-        let stmt = Statement::Println {
-            expr: Expr::StrLit {
-                value: "hello".to_string(),
-            },
-        };
-        let json = serde_json::to_value(&stmt).unwrap();
-
-        assert_eq!(json["type"], "println");
-        assert_eq!(json["expr"]["type"], "str_lit");
-        assert_eq!(json["expr"]["value"], "hello");
-    }
-
-    #[test]
-    fn test_statement_serialize_println_complex_expr() {
-        let stmt = Statement::Println {
-            expr: Expr::Binary {
-                op: BinaryOp::Add,
-                left: Box::new(Expr::IntLit { value: 1 }),
-                right: Box::new(Expr::IntLit { value: 2 }),
-            },
-        };
-        let json = serde_json::to_value(&stmt).unwrap();
-
-        assert_eq!(json["type"], "println");
-        assert_eq!(json["expr"]["type"], "binary");
-        assert_eq!(json["expr"]["op"], "add");
-    }
-
-    #[test]
-    fn test_statement_serialize_print() {
-        let stmt = Statement::Print {
-            expr: Expr::StrLit {
-                value: "hello".to_string(),
-            },
-        };
-        let json = serde_json::to_value(&stmt).unwrap();
-
-        assert_eq!(json["type"], "print");
-        assert_eq!(json["expr"]["type"], "str_lit");
-        assert_eq!(json["expr"]["value"], "hello");
-    }
-
-    #[test]
-    fn test_statement_serialize_error() {
-        let stmt = Statement::Error {
-            message: Expr::StrLit {
-                value: "Something went wrong".to_string(),
-            },
-        };
-        let json = serde_json::to_value(&stmt).unwrap();
-
-        assert_eq!(json["type"], "error");
-        assert_eq!(json["message"]["type"], "str_lit");
-        assert_eq!(json["message"]["value"], "Something went wrong");
-    }
-
-    #[test]
-    fn test_statement_serialize_error_with_variable() {
-        let stmt = Statement::Error {
-            message: Expr::Variable {
-                name: "err_msg".to_string(),
-            },
-        };
-        let json = serde_json::to_value(&stmt).unwrap();
-
-        assert_eq!(json["type"], "error");
-        assert_eq!(json["message"]["type"], "variable");
-        assert_eq!(json["message"]["name"], "err_msg");
-    }
-
-    #[test]
-    fn test_statement_serialize_assign() {
-        let stmt = Statement::Assign {
-            variable: "x".to_string(),
-            value: Expr::IntLit { value: 42 },
-        };
-        let json = serde_json::to_value(&stmt).unwrap();
-
-        assert_eq!(json["type"], "assign");
-        assert_eq!(json["variable"], "x");
-        assert_eq!(json["value"]["type"], "int_lit");
-        assert_eq!(json["value"]["value"], 42);
-    }
-
-    #[test]
-    fn test_statement_serialize_assign_from_input() {
-        let stmt = Statement::Assign {
-            variable: "name".to_string(),
-            value: Expr::Input,
-        };
-        let json = serde_json::to_value(&stmt).unwrap();
-
-        assert_eq!(json["type"], "assign");
-        assert_eq!(json["variable"], "name");
-        assert_eq!(json["value"]["type"], "input");
-    }
-
-    #[test]
-    fn test_statement_serialize_assign_with_cast() {
-        let stmt = Statement::Assign {
-            variable: "num".to_string(),
-            value: Expr::Cast {
-                expr: Box::new(Expr::Input),
-                target_type: TypeName::Int,
-            },
-        };
-        let json = serde_json::to_value(&stmt).unwrap();
-
-        assert_eq!(json["type"], "assign");
-        assert_eq!(json["variable"], "num");
-        assert_eq!(json["value"]["type"], "cast");
-        assert_eq!(json["value"]["target_type"], "int");
-        assert_eq!(json["value"]["expr"]["type"], "input");
-    }
 }

@@ -1723,10 +1723,8 @@ flowchart TD
             .find(|n| matches!(n, Node::Process { .. }))
             .unwrap();
 
-        let q_json = serde_json::to_string(q_process).unwrap();
-        let u_json = serde_json::to_string(u_process).unwrap();
         assert_eq!(
-            q_json, u_json,
+            q_process, u_process,
             "Quoted and unquoted should produce the same AST"
         );
     }
@@ -1757,10 +1755,8 @@ flowchart TD
             .find(|n| matches!(n, Node::Condition { .. }))
             .unwrap();
 
-        let q_json = serde_json::to_string(q_cond).unwrap();
-        let u_json = serde_json::to_string(u_cond).unwrap();
         assert_eq!(
-            q_json, u_json,
+            q_cond, u_cond,
             "Quoted and unquoted condition should produce the same AST"
         );
     }
@@ -1787,8 +1783,7 @@ flowchart TD
             .find(|n| matches!(n, Node::Start { .. }))
             .unwrap();
         assert_eq!(
-            serde_json::to_string(q_start).unwrap(),
-            serde_json::to_string(u_start).unwrap(),
+            q_start, u_start,
             "Quoted and unquoted Start stadium labels should produce the same AST"
         );
 
@@ -1803,8 +1798,7 @@ flowchart TD
             .find(|n| matches!(n, Node::End { .. }))
             .unwrap();
         assert_eq!(
-            serde_json::to_string(q_end).unwrap(),
-            serde_json::to_string(u_end).unwrap(),
+            q_end, u_end,
             "Quoted and unquoted End stadium labels should produce the same AST"
         );
     }

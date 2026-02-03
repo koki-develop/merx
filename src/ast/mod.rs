@@ -29,12 +29,6 @@
 //! - `nodes`: `[Start, Process { id: "A", statements: [Print { expr: StrLit }] }, End]`
 //! - `edges`: `[Edge { from: "Start", to: "A" }, Edge { from: "A", to: "End" }]`
 //!
-//! # Serialization
-//!
-//! All AST types implement [`serde::Serialize`], enabling JSON output for debugging
-//! and tooling integration. Enum variants use the `tag = "type"` pattern for clear
-//! type discrimination in serialized output.
-
 mod edge;
 mod expr;
 mod flowchart;
