@@ -35,12 +35,12 @@
 //! - **Nodes**: `Start`, `End`, process nodes `id[statements]`, condition nodes `id{expr?}`
 //! - **Edges**: `-->` with optional labels `|Yes|`, `|No|`, or custom text
 //! - **Expressions**: Arithmetic, comparison, logical operators with proper precedence
-//! - **Statements**: `println`, `error`, and assignment (`=`)
+//! - **Statements**: `println`, `print`, `error`, and assignment (`=`)
 //!
 //! # See Also
 //!
 //! - [`Flowchart`] - The root AST type produced by parsing
-//! - [`ParseError`] - Error type returned on parse failures
+//! - [`AnalysisError`] - Error type returned on analysis failures
 //! - [pest documentation](https://pest.rs/book/)
 
 mod error;
@@ -51,7 +51,7 @@ use pest::Parser;
 use pest::iterators::Pair;
 use pest_derive::Parser;
 
-pub use error::ParseError;
+pub use error::{AnalysisError, SyntaxError, ValidationError};
 
 use crate::ast::{
     BinaryOp, Direction, Edge, EdgeLabel, Expr, Flowchart, Node, Statement, TypeName, UnaryOp,
@@ -66,7 +66,7 @@ use crate::ast::{
 #[grammar = "grammar.pest"]
 struct MermaidParser;
 
-fn insert_node(nodes: &mut HashMap<String, Node>, node: Node) -> Result<(), ParseError> {
+fn insert_node(nodes: &mut HashMap<String, Node>, node: Node) -> Result<(), ValidationError> {
     let node_id = node.id().to_string();
     match nodes.get(&node_id) {
         Some(existing) => match (existing, &node) {
@@ -84,7 +84,7 @@ fn insert_node(nodes: &mut HashMap<String, Node>, node: Node) -> Result<(), Pars
             // Identical redefinition is allowed.
             (existing, new) if existing == new => Ok(()),
 
-            _ => Err(ParseError::new(format!(
+            _ => Err(ValidationError::new(format!(
                 "Node '{}' is defined multiple times",
                 node_id
             ))),
@@ -94,6 +94,124 @@ fn insert_node(nodes: &mut HashMap<String, Node>, node: Node) -> Result<(), Pars
             Ok(())
         }
     }
+}
+
+fn validate_flowchart(
+    nodes: &HashMap<String, Node>,
+    edges: &[Edge],
+) -> Result<(), ValidationError> {
+    // Validate: condition nodes must have both Yes and No edges
+    for node in nodes.values() {
+        if let Node::Condition { id, .. } = node {
+            let mut has_yes = false;
+            let mut has_no = false;
+
+            for edge in edges {
+                if &edge.from != id {
+                    continue;
+                }
+
+                match &edge.label {
+                    Some(EdgeLabel::Yes) => {
+                        if has_yes {
+                            return Err(ValidationError::new(format!(
+                                "Condition node '{}' has multiple 'Yes' edges",
+                                id
+                            )));
+                        }
+                        has_yes = true;
+                    }
+                    Some(EdgeLabel::No) => {
+                        if has_no {
+                            return Err(ValidationError::new(format!(
+                                "Condition node '{}' has multiple 'No' edges",
+                                id
+                            )));
+                        }
+                        has_no = true;
+                    }
+                    Some(EdgeLabel::Custom(s)) => {
+                        return Err(ValidationError::new(format!(
+                            "Condition node '{}' must have 'Yes' or 'No' label, but got '{}'",
+                            id, s
+                        )));
+                    }
+                    None => {
+                        return Err(ValidationError::new(format!(
+                            "Edge from condition node '{}' must have 'Yes' or 'No' label",
+                            id
+                        )));
+                    }
+                }
+            }
+
+            if !has_yes {
+                return Err(ValidationError::new(format!(
+                    "Condition node '{}' is missing 'Yes' edge",
+                    id
+                )));
+            }
+            if !has_no {
+                return Err(ValidationError::new(format!(
+                    "Condition node '{}' is missing 'No' edge",
+                    id
+                )));
+            }
+        }
+    }
+
+    // Validate: Flowchart must have Start and End nodes
+    if !nodes.values().any(|n| matches!(n, Node::Start { .. })) {
+        return Err(ValidationError::new("Missing 'Start' node"));
+    }
+    if !nodes.values().any(|n| matches!(n, Node::End { .. })) {
+        return Err(ValidationError::new("Missing 'End' node"));
+    }
+
+    // Validate: All edge references must point to defined nodes
+    for edge in edges {
+        if !nodes.contains_key(&edge.from) {
+            return Err(ValidationError::new(format!(
+                "Undefined node '{}' referenced in edge from '{}' to '{}'",
+                edge.from, edge.from, edge.to
+            )));
+        }
+        if !nodes.contains_key(&edge.to) {
+            return Err(ValidationError::new(format!(
+                "Undefined node '{}' referenced in edge from '{}' to '{}'",
+                edge.to, edge.from, edge.to
+            )));
+        }
+    }
+
+    // Validate: End node must not have outgoing edges
+    for edge in edges {
+        if edge.from == "End" {
+            return Err(ValidationError::new("End node cannot have outgoing edges"));
+        }
+    }
+
+    // Validate: Non-condition nodes must have at most one outgoing edge
+    let mut edge_counts: HashMap<String, usize> = HashMap::new();
+    for edge in edges {
+        *edge_counts.entry(edge.from.clone()).or_insert(0) += 1;
+    }
+    for (node_id, count) in edge_counts {
+        if count > 1 {
+            // Condition nodes are allowed to have 2 edges (Yes and No)
+            let is_condition = nodes
+                .get(&node_id)
+                .is_some_and(|n| matches!(n, Node::Condition { .. }));
+            if !is_condition {
+                return Err(ValidationError::new(format!(
+                    "Node '{}' has multiple outgoing edges (expected at most 1)",
+                    node_id
+                )));
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Parses Mermaid flowchart source text into an AST.
@@ -113,7 +231,7 @@ fn insert_node(nodes: &mut HashMap<String, Node>, node: Node) -> Result<(), Pars
 ///
 /// # Errors
 ///
-/// Returns [`ParseError`] in the following cases:
+/// Returns [`AnalysisError`] in the following cases:
 ///
 /// - **Syntax errors**: Invalid Mermaid flowchart syntax
 /// - **Missing Start node**: Flowchart does not contain a `Start` node
@@ -154,7 +272,7 @@ fn insert_node(nodes: &mut HashMap<String, Node>, node: Node) -> Result<(), Pars
 /// - Non-condition nodes have at most one outgoing edge
 ///
 /// This ensures the flowchart can be executed without ambiguity.
-pub fn parse(input: &str) -> Result<Flowchart, ParseError> {
+pub fn parse(input: &str) -> Result<Flowchart, AnalysisError> {
     let pairs = MermaidParser::parse(Rule::flowchart, input)?;
 
     let mut direction = Direction::Td;
@@ -190,116 +308,7 @@ pub fn parse(input: &str) -> Result<Flowchart, ParseError> {
         }
     }
 
-    // Validate: condition nodes must have both Yes and No edges
-    for node in nodes.values() {
-        if let Node::Condition { id, .. } = node {
-            let mut has_yes = false;
-            let mut has_no = false;
-
-            for edge in &edges {
-                if &edge.from != id {
-                    continue;
-                }
-
-                match &edge.label {
-                    Some(EdgeLabel::Yes) => {
-                        if has_yes {
-                            return Err(ParseError::new(format!(
-                                "Condition node '{}' has multiple 'Yes' edges",
-                                id
-                            )));
-                        }
-                        has_yes = true;
-                    }
-                    Some(EdgeLabel::No) => {
-                        if has_no {
-                            return Err(ParseError::new(format!(
-                                "Condition node '{}' has multiple 'No' edges",
-                                id
-                            )));
-                        }
-                        has_no = true;
-                    }
-                    Some(EdgeLabel::Custom(s)) => {
-                        return Err(ParseError::new(format!(
-                            "Condition node '{}' must have 'Yes' or 'No' label, but got '{}'",
-                            id, s
-                        )));
-                    }
-                    None => {
-                        return Err(ParseError::new(format!(
-                            "Edge from condition node '{}' must have 'Yes' or 'No' label",
-                            id
-                        )));
-                    }
-                }
-            }
-
-            if !has_yes {
-                return Err(ParseError::new(format!(
-                    "Condition node '{}' is missing 'Yes' edge",
-                    id
-                )));
-            }
-            if !has_no {
-                return Err(ParseError::new(format!(
-                    "Condition node '{}' is missing 'No' edge",
-                    id
-                )));
-            }
-        }
-    }
-
-    // Validate: Flowchart must have Start and End nodes
-    if !nodes.values().any(|n| matches!(n, Node::Start { .. })) {
-        return Err(ParseError::new("Missing 'Start' node"));
-    }
-    if !nodes.values().any(|n| matches!(n, Node::End { .. })) {
-        return Err(ParseError::new("Missing 'End' node"));
-    }
-
-    // Validate: All edge references must point to defined nodes
-    for edge in &edges {
-        if !nodes.contains_key(&edge.from) {
-            return Err(ParseError::new(format!(
-                "Undefined node '{}' referenced in edge from '{}' to '{}'",
-                edge.from, edge.from, edge.to
-            )));
-        }
-        if !nodes.contains_key(&edge.to) {
-            return Err(ParseError::new(format!(
-                "Undefined node '{}' referenced in edge from '{}' to '{}'",
-                edge.to, edge.from, edge.to
-            )));
-        }
-    }
-
-    // Validate: End node must not have outgoing edges
-    for edge in &edges {
-        if edge.from == "End" {
-            return Err(ParseError::new("End node cannot have outgoing edges"));
-        }
-    }
-
-    // Validate: Non-condition nodes must have at most one outgoing edge
-    let mut edge_counts: HashMap<String, usize> = HashMap::new();
-    for edge in &edges {
-        *edge_counts.entry(edge.from.clone()).or_insert(0) += 1;
-    }
-    for (node_id, count) in edge_counts {
-        if count > 1 {
-            // Condition nodes are allowed to have 2 edges (Yes and No)
-            let is_condition = nodes
-                .get(&node_id)
-                .is_some_and(|n| matches!(n, Node::Condition { .. }));
-            if !is_condition {
-                return Err(ParseError::new(format!(
-                    "Node '{}' has multiple outgoing edges (expected at most 1)",
-                    node_id
-                )));
-            }
-        }
-    }
+    validate_flowchart(&nodes, &edges)?;
 
     let nodes_vec: Vec<Node> = nodes.into_values().collect();
 
@@ -368,29 +377,29 @@ struct ParsedLine {
 ///
 /// # Errors
 ///
-/// Returns [`ParseError`] if node parsing fails.
-fn parse_line(pair: Pair<Rule>) -> Result<ParsedLine, ParseError> {
+/// Returns [`SyntaxError`] if node parsing fails.
+fn parse_line(pair: Pair<Rule>) -> Result<ParsedLine, SyntaxError> {
     let edge_def = pair
         .into_inner()
         .next()
-        .ok_or_else(|| ParseError::new("internal: expected edge_def in line"))?;
+        .ok_or_else(|| SyntaxError::new("internal: expected edge_def in line"))?;
     let mut inner = edge_def.into_inner();
 
     let from_pair = inner
         .next()
-        .ok_or_else(|| ParseError::new("internal: expected from_pair in edge_def"))?;
+        .ok_or_else(|| SyntaxError::new("internal: expected from_pair in edge_def"))?;
     let (from_id, from_node) = parse_node_ref(from_pair)?;
 
     let mut label = None;
     let mut to_pair = inner
         .next()
-        .ok_or_else(|| ParseError::new("internal: expected to_pair in edge_def"))?;
+        .ok_or_else(|| SyntaxError::new("internal: expected to_pair in edge_def"))?;
 
     if to_pair.as_rule() == Rule::edge_label {
         label = Some(parse_edge_label(to_pair)?);
         to_pair = inner
             .next()
-            .ok_or_else(|| ParseError::new("internal: expected to_pair after edge_label"))?;
+            .ok_or_else(|| SyntaxError::new("internal: expected to_pair after edge_label"))?;
     }
 
     let (to_id, to_node) = parse_node_ref(to_pair)?;
@@ -419,11 +428,11 @@ fn parse_line(pair: Pair<Rule>) -> Result<ParsedLine, ParseError> {
 /// - [`EdgeLabel::Yes`] for "yes" (case-insensitive)
 /// - [`EdgeLabel::No`] for "no" (case-insensitive)
 /// - [`EdgeLabel::Custom`] for any other text
-fn parse_edge_label(pair: Pair<Rule>) -> Result<EdgeLabel, ParseError> {
+fn parse_edge_label(pair: Pair<Rule>) -> Result<EdgeLabel, SyntaxError> {
     let label_text = pair
         .into_inner()
         .next()
-        .ok_or_else(|| ParseError::new("internal: expected label_text in edge_label"))?
+        .ok_or_else(|| SyntaxError::new("internal: expected label_text in edge_label"))?
         .as_str();
     Ok(match label_text.to_lowercase().as_str() {
         "yes" => EdgeLabel::Yes,
@@ -449,12 +458,12 @@ fn parse_edge_label(pair: Pair<Rule>) -> Result<EdgeLabel, ParseError> {
 ///
 /// # Errors
 ///
-/// Returns [`ParseError`] if the node definition cannot be parsed.
-fn parse_node_ref(pair: Pair<Rule>) -> Result<(String, Option<Node>), ParseError> {
+/// Returns [`SyntaxError`] if the node definition cannot be parsed.
+fn parse_node_ref(pair: Pair<Rule>) -> Result<(String, Option<Node>), SyntaxError> {
     let inner = pair
         .into_inner()
         .next()
-        .ok_or_else(|| ParseError::new("internal: expected inner in node_ref"))?;
+        .ok_or_else(|| SyntaxError::new("internal: expected inner in node_ref"))?;
 
     match inner.as_rule() {
         Rule::node_with_def => {
@@ -488,12 +497,12 @@ fn parse_node_ref(pair: Pair<Rule>) -> Result<(String, Option<Node>), ParseError
 ///
 /// # Errors
 ///
-/// Returns [`ParseError`] if statement or expression parsing fails.
-fn parse_node_with_def(pair: Pair<Rule>) -> Result<Node, ParseError> {
+/// Returns [`SyntaxError`] if statement or expression parsing fails.
+fn parse_node_with_def(pair: Pair<Rule>) -> Result<Node, SyntaxError> {
     let inner = pair
         .into_inner()
         .next()
-        .ok_or_else(|| ParseError::new("internal: expected inner in node_with_def"))?;
+        .ok_or_else(|| SyntaxError::new("internal: expected inner in node_with_def"))?;
 
     match inner.as_rule() {
         Rule::start_node => {
@@ -508,12 +517,12 @@ fn parse_node_with_def(pair: Pair<Rule>) -> Result<Node, ParseError> {
             let mut parts = inner.into_inner();
             let id = parts
                 .next()
-                .ok_or_else(|| ParseError::new("internal: expected id in process_node"))?
+                .ok_or_else(|| SyntaxError::new("internal: expected id in process_node"))?
                 .as_str()
                 .to_string();
             let statements_pair = parts
                 .next()
-                .ok_or_else(|| ParseError::new("internal: expected statements in process_node"))?;
+                .ok_or_else(|| SyntaxError::new("internal: expected statements in process_node"))?;
             let statements = parse_statements(statements_pair)?;
             Ok(Node::Process { id, statements })
         }
@@ -521,12 +530,12 @@ fn parse_node_with_def(pair: Pair<Rule>) -> Result<Node, ParseError> {
             let mut parts = inner.into_inner();
             let id = parts
                 .next()
-                .ok_or_else(|| ParseError::new("internal: expected id in condition_node"))?
+                .ok_or_else(|| SyntaxError::new("internal: expected id in condition_node"))?
                 .as_str()
                 .to_string();
             let expr_pair = parts
                 .next()
-                .ok_or_else(|| ParseError::new("internal: expected expr in condition_node"))?;
+                .ok_or_else(|| SyntaxError::new("internal: expected expr in condition_node"))?;
             let condition = parse_expression(expr_pair)?;
             Ok(Node::Condition { id, condition })
         }
@@ -570,8 +579,8 @@ fn parse_stadium_label(pair: &Pair<Rule>) -> Option<String> {
 ///
 /// # Errors
 ///
-/// Returns [`ParseError`] if any individual statement cannot be parsed.
-fn parse_statements(pair: Pair<Rule>) -> Result<Vec<Statement>, ParseError> {
+/// Returns [`SyntaxError`] if any individual statement cannot be parsed.
+fn parse_statements(pair: Pair<Rule>) -> Result<Vec<Statement>, SyntaxError> {
     let mut statements = Vec::new();
 
     for stmt_pair in pair.into_inner() {
@@ -601,19 +610,19 @@ fn parse_statements(pair: Pair<Rule>) -> Result<Vec<Statement>, ParseError> {
 ///
 /// # Errors
 ///
-/// Returns [`ParseError`] if the expression within the statement cannot be parsed.
-fn parse_statement(pair: Pair<Rule>) -> Result<Statement, ParseError> {
+/// Returns [`SyntaxError`] if the expression within the statement cannot be parsed.
+fn parse_statement(pair: Pair<Rule>) -> Result<Statement, SyntaxError> {
     let inner = pair
         .into_inner()
         .next()
-        .ok_or_else(|| ParseError::new("internal: expected inner in statement"))?;
+        .ok_or_else(|| SyntaxError::new("internal: expected inner in statement"))?;
 
     match inner.as_rule() {
         Rule::println_stmt => {
             let expr_pair = inner
                 .into_inner()
                 .next()
-                .ok_or_else(|| ParseError::new("internal: expected expr in println_stmt"))?;
+                .ok_or_else(|| SyntaxError::new("internal: expected expr in println_stmt"))?;
             let expr = parse_expression(expr_pair)?;
             Ok(Statement::Println { expr })
         }
@@ -621,7 +630,7 @@ fn parse_statement(pair: Pair<Rule>) -> Result<Statement, ParseError> {
             let expr_pair = inner
                 .into_inner()
                 .next()
-                .ok_or_else(|| ParseError::new("internal: expected expr in print_stmt"))?;
+                .ok_or_else(|| SyntaxError::new("internal: expected expr in print_stmt"))?;
             let expr = parse_expression(expr_pair)?;
             Ok(Statement::Print { expr })
         }
@@ -629,7 +638,7 @@ fn parse_statement(pair: Pair<Rule>) -> Result<Statement, ParseError> {
             let expr_pair = inner
                 .into_inner()
                 .next()
-                .ok_or_else(|| ParseError::new("internal: expected expr in error_stmt"))?;
+                .ok_or_else(|| SyntaxError::new("internal: expected expr in error_stmt"))?;
             let message = parse_expression(expr_pair)?;
             Ok(Statement::Error { message })
         }
@@ -637,13 +646,13 @@ fn parse_statement(pair: Pair<Rule>) -> Result<Statement, ParseError> {
             let mut parts = inner.into_inner();
             let variable = parts
                 .next()
-                .ok_or_else(|| ParseError::new("internal: expected variable in assign_stmt"))?
+                .ok_or_else(|| SyntaxError::new("internal: expected variable in assign_stmt"))?
                 .as_str()
                 .to_string();
             let value = parse_expression(
                 parts
                     .next()
-                    .ok_or_else(|| ParseError::new("internal: expected value in assign_stmt"))?,
+                    .ok_or_else(|| SyntaxError::new("internal: expected value in assign_stmt"))?,
             )?;
             Ok(Statement::Assign { variable, value })
         }
@@ -667,13 +676,13 @@ fn parse_statement(pair: Pair<Rule>) -> Result<Statement, ParseError> {
 ///
 /// # Errors
 ///
-/// Returns [`ParseError`] if any sub-expression cannot be parsed.
+/// Returns [`SyntaxError`] if any sub-expression cannot be parsed.
 ///
 /// # See Also
 ///
 /// - [`build_expr_with_precedence`] - Handles precedence-based tree construction
 /// - [`precedence`] - Defines operator precedence levels
-fn parse_expression(pair: Pair<Rule>) -> Result<Expr, ParseError> {
+fn parse_expression(pair: Pair<Rule>) -> Result<Expr, SyntaxError> {
     let mut operands: Vec<Expr> = Vec::new();
     let mut operators: Vec<BinaryOp> = Vec::new();
 
@@ -757,7 +766,7 @@ fn precedence(op: &BinaryOp) -> u8 {
 ///
 /// # Errors
 ///
-/// Returns [`ParseError`] if recursive parsing fails (propagated from callers).
+/// Returns [`SyntaxError`] if recursive parsing fails (propagated from callers).
 ///
 /// # Example
 ///
@@ -768,7 +777,7 @@ fn precedence(op: &BinaryOp) -> u8 {
 fn build_expr_with_precedence(
     mut operands: Vec<Expr>,
     operators: Vec<BinaryOp>,
-) -> Result<Expr, ParseError> {
+) -> Result<Expr, SyntaxError> {
     if operators.is_empty() {
         return Ok(operands.remove(0));
     }
@@ -818,8 +827,8 @@ fn build_expr_with_precedence(
 ///
 /// # Errors
 ///
-/// Returns [`ParseError`] if the inner cast expression cannot be parsed.
-fn parse_unary_expr(pair: Pair<Rule>) -> Result<Expr, ParseError> {
+/// Returns [`SyntaxError`] if the inner cast expression cannot be parsed.
+fn parse_unary_expr(pair: Pair<Rule>) -> Result<Expr, SyntaxError> {
     let mut unary_ops: Vec<UnaryOp> = Vec::new();
     let mut cast_expr = None;
 
@@ -840,7 +849,7 @@ fn parse_unary_expr(pair: Pair<Rule>) -> Result<Expr, ParseError> {
     }
 
     let mut expr =
-        cast_expr.ok_or_else(|| ParseError::new("internal: expected cast_expr in unary_expr"))?;
+        cast_expr.ok_or_else(|| SyntaxError::new("internal: expected cast_expr in unary_expr"))?;
 
     // Apply unary operators in reverse order
     for op in unary_ops.into_iter().rev() {
@@ -876,8 +885,8 @@ fn parse_unary_expr(pair: Pair<Rule>) -> Result<Expr, ParseError> {
 ///
 /// # Errors
 ///
-/// Returns [`ParseError`] if the primary expression cannot be parsed.
-fn parse_cast_expr(pair: Pair<Rule>) -> Result<Expr, ParseError> {
+/// Returns [`SyntaxError`] if the primary expression cannot be parsed.
+fn parse_cast_expr(pair: Pair<Rule>) -> Result<Expr, SyntaxError> {
     let mut expr = None;
     let mut target_type = None;
 
@@ -898,7 +907,8 @@ fn parse_cast_expr(pair: Pair<Rule>) -> Result<Expr, ParseError> {
         }
     }
 
-    let mut result = expr.ok_or_else(|| ParseError::new("internal: expected expr in cast_expr"))?;
+    let mut result =
+        expr.ok_or_else(|| SyntaxError::new("internal: expected expr in cast_expr"))?;
 
     if let Some(t) = target_type {
         result = Expr::Cast {
@@ -930,12 +940,12 @@ fn parse_cast_expr(pair: Pair<Rule>) -> Result<Expr, ParseError> {
 ///
 /// # Errors
 ///
-/// Returns [`ParseError`] if a nested expression cannot be parsed.
-fn parse_primary(pair: Pair<Rule>) -> Result<Expr, ParseError> {
+/// Returns [`SyntaxError`] if a nested expression cannot be parsed.
+fn parse_primary(pair: Pair<Rule>) -> Result<Expr, SyntaxError> {
     let inner = pair
         .into_inner()
         .next()
-        .ok_or_else(|| ParseError::new("internal: expected inner in primary"))?;
+        .ok_or_else(|| SyntaxError::new("internal: expected inner in primary"))?;
 
     match inner.as_rule() {
         Rule::expression => parse_expression(inner),
@@ -947,7 +957,7 @@ fn parse_primary(pair: Pair<Rule>) -> Result<Expr, ParseError> {
             let s = inner.as_str();
             Ok(Expr::IntLit {
                 value: s.parse::<i64>().map_err(|_| {
-                    ParseError::new(format!("integer literal '{}' is out of range", s))
+                    SyntaxError::new(format!("integer literal '{}' is out of range", s))
                 })?,
             })
         }
@@ -970,7 +980,7 @@ fn parse_primary(pair: Pair<Rule>) -> Result<Expr, ParseError> {
 ///
 /// Supports: `\\'`, `\\\\`, `\\n`, `\\t`, `\\r`, `\\0`, `\\xHH`.
 /// The grammar guarantees that only valid escape sequences reach this function.
-fn unescape_string(raw: &str) -> Result<String, ParseError> {
+fn unescape_string(raw: &str) -> Result<String, SyntaxError> {
     let mut result = String::with_capacity(raw.len());
     let mut chars = raw.chars();
 
@@ -978,16 +988,16 @@ fn unescape_string(raw: &str) -> Result<String, ParseError> {
         if c == '\\' {
             chars
                 .next()
-                .ok_or_else(|| ParseError::new("internal: truncated escape sequence"))?;
+                .ok_or_else(|| SyntaxError::new("internal: truncated escape sequence"))?;
             let specifier = chars
                 .next()
-                .ok_or_else(|| ParseError::new("internal: truncated escape sequence"))?;
+                .ok_or_else(|| SyntaxError::new("internal: truncated escape sequence"))?;
             match specifier {
                 '\'' => result.push('\''),
                 '\\' => {
                     chars
                         .next()
-                        .ok_or_else(|| ParseError::new("internal: truncated backslash escape"))?;
+                        .ok_or_else(|| SyntaxError::new("internal: truncated backslash escape"))?;
                     result.push('\\');
                     result.push('\\');
                 }
@@ -999,17 +1009,17 @@ fn unescape_string(raw: &str) -> Result<String, ParseError> {
                     let h1 = chars
                         .next()
                         .and_then(|c| c.to_digit(16))
-                        .ok_or_else(|| ParseError::new("internal: invalid hex escape"))?
+                        .ok_or_else(|| SyntaxError::new("internal: invalid hex escape"))?
                         as u8;
                     let h2 = chars
                         .next()
                         .and_then(|c| c.to_digit(16))
-                        .ok_or_else(|| ParseError::new("internal: invalid hex escape"))?
+                        .ok_or_else(|| SyntaxError::new("internal: invalid hex escape"))?
                         as u8;
                     result.push((h1 * 16 + h2) as char);
                 }
                 _ => {
-                    return Err(ParseError::new(
+                    return Err(SyntaxError::new(
                         "internal: unexpected escape specifier in string",
                     ));
                 }
@@ -1320,7 +1330,11 @@ mod tests {
         let result = parse(input);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(err.to_string(), "End node cannot have outgoing edges");
+        assert!(matches!(err, AnalysisError::Validation(_)));
+        assert_eq!(
+            err.to_string(),
+            "Validation error: End node cannot have outgoing edges"
+        );
     }
 
     #[test]
@@ -1345,9 +1359,10 @@ mod tests {
         let result = parse(input);
         assert!(result.is_err());
         let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
         assert_eq!(
             err.to_string(),
-            "Node 'A' has multiple outgoing edges (expected at most 1)"
+            "Validation error: Node 'A' has multiple outgoing edges (expected at most 1)"
         );
     }
 
@@ -1362,9 +1377,10 @@ mod tests {
         let result = parse(input);
         assert!(result.is_err());
         let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
         assert_eq!(
             err.to_string(),
-            "Node 'Start' has multiple outgoing edges (expected at most 1)"
+            "Validation error: Node 'Start' has multiple outgoing edges (expected at most 1)"
         );
     }
 
@@ -1389,7 +1405,11 @@ mod tests {
         let result = parse(input);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(err.to_string(), "Node 'A' is defined multiple times");
+        assert!(matches!(err, AnalysisError::Validation(_)));
+        assert_eq!(
+            err.to_string(),
+            "Validation error: Node 'A' is defined multiple times"
+        );
     }
 
     #[test]
@@ -1403,7 +1423,11 @@ mod tests {
         let result = parse(input);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(err.to_string(), "Node 'A' is defined multiple times");
+        assert!(matches!(err, AnalysisError::Validation(_)));
+        assert_eq!(
+            err.to_string(),
+            "Validation error: Node 'A' is defined multiple times"
+        );
     }
 
     #[test]
@@ -1416,7 +1440,11 @@ mod tests {
         let result = parse(input);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(err.to_string(), "Node 'Start' is defined multiple times");
+        assert!(matches!(err, AnalysisError::Validation(_)));
+        assert_eq!(
+            err.to_string(),
+            "Validation error: Node 'Start' is defined multiple times"
+        );
     }
 
     #[test]
@@ -1429,7 +1457,11 @@ mod tests {
         let result = parse(input);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(err.to_string(), "Node 'End' is defined multiple times");
+        assert!(matches!(err, AnalysisError::Validation(_)));
+        assert_eq!(
+            err.to_string(),
+            "Validation error: Node 'End' is defined multiple times"
+        );
     }
 
     #[test]
@@ -1488,7 +1520,11 @@ mod tests {
         let result = parse(input);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(err.to_string(), "Node 'A' is defined multiple times");
+        assert!(matches!(err, AnalysisError::Validation(_)));
+        assert_eq!(
+            err.to_string(),
+            "Validation error: Node 'A' is defined multiple times"
+        );
     }
 
     #[test]
@@ -1550,6 +1586,7 @@ mod tests {
         let result = parse(input);
         assert!(result.is_err());
         let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
         assert!(
             err.to_string().contains("multiple 'Yes' edges"),
             "Expected error about multiple Yes edges, got: {}",
@@ -1571,6 +1608,7 @@ mod tests {
         let result = parse(input);
         assert!(result.is_err());
         let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
         assert!(
             err.to_string().contains("multiple 'No' edges"),
             "Expected error about multiple No edges, got: {}",
@@ -1587,6 +1625,7 @@ mod tests {
 "#;
         let result = parse(input);
         assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AnalysisError::Syntax(_)));
     }
 
     #[test]
@@ -1595,6 +1634,7 @@ mod tests {
 "#;
         let result = parse(input);
         assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AnalysisError::Validation(_)));
     }
 
     #[test]
@@ -1606,6 +1646,7 @@ mod tests {
         let result = parse(input);
         assert!(result.is_err());
         let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
         assert!(
             err.to_string().contains("Missing 'Start' node"),
             "Error should mention missing Start node: {}",
@@ -1622,6 +1663,7 @@ mod tests {
         let result = parse(input);
         assert!(result.is_err());
         let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
         assert!(
             err.to_string().contains("Missing 'End' node"),
             "Error should mention missing End node: {}",
@@ -2047,33 +2089,39 @@ flowchart TD
 
     #[test]
     fn test_parse_string_with_invalid_escape() {
-        // Single backslash should cause a parse error
+        // Single backslash should cause a syntax error
         let input = "flowchart TD\n    Start --> A[println 'hello\\world']\n    A --> End\n";
         let result = parse(input);
-        assert!(result.is_err(), "Single backslash should cause parse error");
+        assert!(
+            result.is_err(),
+            "Single backslash should cause syntax error"
+        );
+        assert!(matches!(result.unwrap_err(), AnalysisError::Syntax(_)));
     }
 
     #[test]
     fn test_parse_string_with_invalid_escape_sequence() {
-        // \\ followed by non-special char should cause a parse error
+        // \\ followed by non-special char should cause a syntax error
         let input = "flowchart TD\n    Start --> A[println 'hello\\\\world']\n    A --> End\n";
         let result = parse(input);
         assert!(
             result.is_err(),
-            "Invalid escape sequence should cause parse error"
+            "Invalid escape sequence should cause syntax error"
         );
+        assert!(matches!(result.unwrap_err(), AnalysisError::Syntax(_)));
     }
 
     #[test]
     fn test_parse_string_trailing_backslash_is_error() {
-        // String ending with a lone backslash: 'hello\' should be a parse error,
+        // String ending with a lone backslash: 'hello\' should be a syntax error,
         // not interpreted as an escaped closing quote
         let input = "flowchart TD\n    Start --> A[println 'hello\\']\n    A --> End\n";
         let result = parse(input);
         assert!(
             result.is_err(),
-            "Trailing lone backslash should cause parse error"
+            "Trailing lone backslash should cause syntax error"
         );
+        assert!(matches!(result.unwrap_err(), AnalysisError::Syntax(_)));
     }
 
     #[test]
@@ -2145,13 +2193,14 @@ flowchart TD
 
     #[test]
     fn test_parse_string_with_invalid_hex_incomplete() {
-        // \\x with only one hex digit should cause a parse error
+        // \\x with only one hex digit should cause a syntax error
         let input = "flowchart TD\n    Start --> A[println 'hello\\\\x4world']\n    A --> End\n";
         let result = parse(input);
         assert!(
             result.is_err(),
-            "Incomplete hex escape should cause parse error"
+            "Incomplete hex escape should cause syntax error"
         );
+        assert!(matches!(result.unwrap_err(), AnalysisError::Syntax(_)));
     }
 
     #[test]
@@ -2163,9 +2212,11 @@ flowchart TD
 "#;
         let result = parse(input);
         assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
         assert_eq!(
-            result.unwrap_err().to_string(),
-            "Undefined node 'B' referenced in edge from 'A' to 'B'"
+            err.to_string(),
+            "Validation error: Undefined node 'B' referenced in edge from 'A' to 'B'"
         );
     }
 
@@ -2178,9 +2229,11 @@ flowchart TD
 "#;
         let result = parse(input);
         assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
         assert_eq!(
-            result.unwrap_err().to_string(),
-            "Undefined node 'B' referenced in edge from 'B' to 'End'"
+            err.to_string(),
+            "Validation error: Undefined node 'B' referenced in edge from 'B' to 'End'"
         );
     }
 
@@ -2205,9 +2258,11 @@ flowchart TD
 "#;
         let result = parse(input);
         assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
         assert_eq!(
-            result.unwrap_err().to_string(),
-            "Undefined node 'B' referenced in edge from 'A' to 'B'"
+            err.to_string(),
+            "Validation error: Undefined node 'B' referenced in edge from 'A' to 'B'"
         );
     }
 }

@@ -41,7 +41,7 @@ src/
 ├── grammar.pest     # PEG grammar for Mermaid flowchart syntax
 ├── parser/
 │   ├── mod.rs       # Parser implementation using pest
-│   └── error.rs     # ParseError type
+│   └── error.rs     # SyntaxError, ValidationError, AnalysisError types
 ├── ast/
 │   ├── mod.rs       # Re-exports all AST types
 │   ├── flowchart.rs # Flowchart, Direction
@@ -70,7 +70,7 @@ tests/
 ### Parser
 
 - Uses **pest** with PEG grammar defined in `src/grammar.pest`
-- Entry point: `parser::parse(&str) -> Result<Flowchart, ParseError>`
+- Entry point: `parser::parse(&str) -> Result<Flowchart, AnalysisError>`
 - Handles operator precedence manually in code (see `build_expr_with_precedence`)
 - Validates that condition nodes have exactly one `Yes` and one `No` edge
 - Validates Start and End node existence at parse time

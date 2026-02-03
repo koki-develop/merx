@@ -326,11 +326,12 @@ mod valid_flowcharts {
 }
 
 // =============================================================================
-// Invalid flowchart tests - Parse errors
+// Invalid flowchart tests - Syntax and validation errors
 // =============================================================================
 
 mod invalid_flowcharts {
     use super::*;
+    use merx::parser::AnalysisError;
 
     #[test]
     fn test_invalid_syntax() {
@@ -338,6 +339,7 @@ mod invalid_flowcharts {
         let result = parser::parse(source);
 
         assert!(result.is_err(), "Should fail to parse invalid syntax");
+        assert!(matches!(result.unwrap_err(), AnalysisError::Syntax(_)));
     }
 
     #[test]
@@ -347,6 +349,7 @@ mod invalid_flowcharts {
 
         assert!(result.is_err(), "Should fail with missing Yes edge");
         let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
         assert!(
             err.to_string().contains("missing 'Yes' edge"),
             "Error should mention missing Yes edge: {}",
@@ -361,6 +364,7 @@ mod invalid_flowcharts {
 
         assert!(result.is_err(), "Should fail with missing No edge");
         let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
         assert!(
             err.to_string().contains("missing 'No' edge"),
             "Error should mention missing No edge: {}",
@@ -375,6 +379,7 @@ mod invalid_flowcharts {
 
         assert!(result.is_err(), "Should fail with multiple Yes edges");
         let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
         assert!(
             err.to_string().contains("multiple 'Yes' edges"),
             "Error should mention multiple Yes edges: {}",
@@ -391,6 +396,7 @@ mod invalid_flowcharts {
             result.is_err(),
             "Should fail to parse invalid escape sequence"
         );
+        assert!(matches!(result.unwrap_err(), AnalysisError::Syntax(_)));
     }
 
     #[test]
@@ -400,6 +406,7 @@ mod invalid_flowcharts {
 
         assert!(result.is_err(), "Should fail when End has outgoing edge");
         let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
         assert!(
             err.to_string().contains("End node cannot have outgoing"),
             "Error should mention End node outgoing edge: {}",
@@ -416,6 +423,7 @@ mod invalid_flowcharts {
             result.is_err(),
             "Should fail to parse invalid hex escape sequence"
         );
+        assert!(matches!(result.unwrap_err(), AnalysisError::Syntax(_)));
     }
 
     #[test]
@@ -427,6 +435,7 @@ mod invalid_flowcharts {
             "Should fail at parse with missing Start node"
         );
         let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
         assert!(
             err.to_string().contains("Missing 'Start' node"),
             "Error should mention missing Start node: {}",
@@ -443,6 +452,7 @@ mod invalid_flowcharts {
             "Should fail at parse with missing End node"
         );
         let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
         assert!(
             err.to_string().contains("Missing 'End' node"),
             "Error should mention missing End node: {}",
@@ -459,6 +469,7 @@ mod invalid_flowcharts {
             "Should fail when a node is defined multiple times"
         );
         let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
         assert!(
             err.to_string().contains("defined multiple times"),
             "Error should mention duplicate node definition: {}",
@@ -475,6 +486,7 @@ mod invalid_flowcharts {
             "Should fail when an edge references an undefined node"
         );
         let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
         assert!(
             err.to_string().contains("Undefined node"),
             "Error should mention undefined node: {}",

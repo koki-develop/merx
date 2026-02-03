@@ -39,7 +39,7 @@ fn main() -> ExitCode {
             let flowchart = match parser::parse(&content) {
                 Ok(f) => f,
                 Err(e) => {
-                    eprintln!("Parse error: {}", e);
+                    eprintln!("{}", e);
                     return ExitCode::from(2);
                 }
             };
