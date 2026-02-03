@@ -41,7 +41,9 @@ src/
 ├── grammar.pest     # PEG grammar for Mermaid flowchart syntax
 ├── parser/
 │   ├── mod.rs       # Parser implementation using pest
-│   └── error.rs     # SyntaxError, ValidationError, AnalysisError types
+│   ├── error.rs     # SyntaxError, ValidationError, AnalysisError types
+│   ├── expr.rs      # Expression parser (precedence, unary, cast, primary)
+│   └── validate.rs  # Semantic validation (node/edge constraints)
 ├── ast/
 │   ├── mod.rs       # Re-exports all AST types
 │   ├── flowchart.rs # Flowchart, Direction
@@ -56,7 +58,8 @@ src/
     ├── env.rs       # Environment (variable storage)
     ├── eval.rs      # Expression evaluation
     ├── exec.rs      # Statement execution
-    └── interpreter.rs # Interpreter main loop
+    ├── interpreter.rs # Interpreter main loop
+    └── test_helpers.rs # Shared test mocks (MockInputReader, MockOutputWriter) [cfg(test)]
 
 examples/                        # Example .mmd programs (fibonacci, fizzbuzz, hello)
 
