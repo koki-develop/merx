@@ -43,14 +43,17 @@ use super::eval::{InputReader, eval_expr};
 /// }
 ///
 /// impl OutputWriter for CapturedOutput {
-///     fn write_stdout(&mut self, s: &str) {
+///     fn write_stdout(&mut self, s: &str) -> Result<(), RuntimeError> {
 ///         self.stdout.push(s.to_string());
+///         Ok(())
 ///     }
-///     fn write_stdout_no_newline(&mut self, s: &str) {
+///     fn write_stdout_no_newline(&mut self, s: &str) -> Result<(), RuntimeError> {
 ///         self.stdout.push(s.to_string());
+///         Ok(())
 ///     }
-///     fn write_stderr(&mut self, s: &str) {
+///     fn write_stderr(&mut self, s: &str) -> Result<(), RuntimeError> {
 ///         self.stderr.push(s.to_string());
+///         Ok(())
 ///     }
 /// }
 /// ```
@@ -58,23 +61,23 @@ pub trait OutputWriter {
     /// Writes a line to standard output.
     ///
     /// The implementation should append a newline after the content.
-    fn write_stdout(&mut self, s: &str);
+    fn write_stdout(&mut self, s: &str) -> Result<(), RuntimeError>;
 
     /// Writes to standard output without a trailing newline.
     ///
     /// The implementation should flush stdout to ensure immediate output.
-    fn write_stdout_no_newline(&mut self, s: &str);
+    fn write_stdout_no_newline(&mut self, s: &str) -> Result<(), RuntimeError>;
 
     /// Writes a line to standard error.
     ///
     /// The implementation should append a newline after the content.
-    fn write_stderr(&mut self, s: &str);
+    fn write_stderr(&mut self, s: &str) -> Result<(), RuntimeError>;
 }
 
 /// Output writer that writes to standard output and error.
 ///
 /// This is the default output writer used in production. It uses
-/// [`println!`] for stdout and [`eprintln!`] for stderr.
+/// [`writeln!`] with explicit stdout/stderr handles for proper error propagation.
 ///
 /// # Examples
 ///
@@ -94,18 +97,29 @@ impl StdioWriter {
 }
 
 impl OutputWriter for StdioWriter {
-    fn write_stdout(&mut self, s: &str) {
-        println!("{}", s);
-    }
-
-    fn write_stdout_no_newline(&mut self, s: &str) {
+    fn write_stdout(&mut self, s: &str) -> Result<(), RuntimeError> {
         use std::io::{Write, stdout};
-        print!("{}", s);
-        let _ = stdout().flush();
+        writeln!(stdout(), "{}", s).map_err(|e| RuntimeError::IoError {
+            message: e.to_string(),
+        })
     }
 
-    fn write_stderr(&mut self, s: &str) {
-        eprintln!("{}", s);
+    fn write_stdout_no_newline(&mut self, s: &str) -> Result<(), RuntimeError> {
+        use std::io::{Write, stdout};
+        let mut out = stdout().lock();
+        write!(out, "{}", s).map_err(|e| RuntimeError::IoError {
+            message: e.to_string(),
+        })?;
+        out.flush().map_err(|e| RuntimeError::IoError {
+            message: e.to_string(),
+        })
+    }
+
+    fn write_stderr(&mut self, s: &str) -> Result<(), RuntimeError> {
+        use std::io::{Write, stderr};
+        writeln!(stderr(), "{}", s).map_err(|e| RuntimeError::IoError {
+            message: e.to_string(),
+        })
     }
 }
 
@@ -127,11 +141,11 @@ impl OutputWriter for StdioWriter {
 ///
 /// # Errors
 ///
-/// Any error from expression evaluation is propagated. Common errors:
+/// Any error from expression evaluation or output writing is propagated. Common errors:
 ///
 /// - [`RuntimeError::UndefinedVariable`] - Expression references undefined variable
 /// - [`RuntimeError::TypeError`] - Type mismatch in expression
-/// - [`RuntimeError::IoError`] - Input reading failed
+/// - [`RuntimeError::IoError`] - Input reading or output writing failed
 ///
 /// # Examples
 ///
@@ -164,17 +178,17 @@ pub fn exec_statement<R: InputReader, W: OutputWriter>(
         }
         Statement::Println { expr } => {
             let val = eval_expr(expr, env, input_reader)?;
-            output_writer.write_stdout(&val.to_string());
+            output_writer.write_stdout(&val.to_string())?;
             Ok(())
         }
         Statement::Print { expr } => {
             let val = eval_expr(expr, env, input_reader)?;
-            output_writer.write_stdout_no_newline(&val.to_string());
+            output_writer.write_stdout_no_newline(&val.to_string())?;
             Ok(())
         }
         Statement::Error { message } => {
             let val = eval_expr(message, env, input_reader)?;
-            output_writer.write_stderr(&val.to_string());
+            output_writer.write_stderr(&val.to_string())?;
             Ok(())
         }
     }
@@ -230,16 +244,19 @@ mod tests {
     }
 
     impl OutputWriter for MockOutputWriter {
-        fn write_stdout(&mut self, s: &str) {
+        fn write_stdout(&mut self, s: &str) -> Result<(), RuntimeError> {
             self.stdout.push(s.to_string());
+            Ok(())
         }
 
-        fn write_stdout_no_newline(&mut self, s: &str) {
+        fn write_stdout_no_newline(&mut self, s: &str) -> Result<(), RuntimeError> {
             self.stdout.push(s.to_string());
+            Ok(())
         }
 
-        fn write_stderr(&mut self, s: &str) {
+        fn write_stderr(&mut self, s: &str) -> Result<(), RuntimeError> {
             self.stderr.push(s.to_string());
+            Ok(())
         }
     }
 
@@ -538,5 +555,76 @@ mod tests {
             }
             _ => panic!("Expected IoError"),
         }
+    }
+
+    /// Output writer that always fails, for testing error propagation.
+    struct FailingOutputWriter;
+
+    impl OutputWriter for FailingOutputWriter {
+        fn write_stdout(&mut self, _s: &str) -> Result<(), RuntimeError> {
+            Err(RuntimeError::IoError {
+                message: "stdout write failed".to_string(),
+            })
+        }
+
+        fn write_stdout_no_newline(&mut self, _s: &str) -> Result<(), RuntimeError> {
+            Err(RuntimeError::IoError {
+                message: "stdout write failed".to_string(),
+            })
+        }
+
+        fn write_stderr(&mut self, _s: &str) -> Result<(), RuntimeError> {
+            Err(RuntimeError::IoError {
+                message: "stderr write failed".to_string(),
+            })
+        }
+    }
+
+    #[test]
+    fn test_println_propagates_write_error() {
+        let mut env = Environment::new();
+        let mut input = MockInputReader::new(vec![]);
+        let mut output = FailingOutputWriter;
+
+        let stmt = Statement::Println {
+            expr: Expr::StrLit {
+                value: "hello".to_string(),
+            },
+        };
+
+        let result = exec_statement(&stmt, &mut env, &mut input, &mut output);
+        assert!(matches!(result, Err(RuntimeError::IoError { .. })));
+    }
+
+    #[test]
+    fn test_print_propagates_write_error() {
+        let mut env = Environment::new();
+        let mut input = MockInputReader::new(vec![]);
+        let mut output = FailingOutputWriter;
+
+        let stmt = Statement::Print {
+            expr: Expr::StrLit {
+                value: "hello".to_string(),
+            },
+        };
+
+        let result = exec_statement(&stmt, &mut env, &mut input, &mut output);
+        assert!(matches!(result, Err(RuntimeError::IoError { .. })));
+    }
+
+    #[test]
+    fn test_error_stmt_propagates_write_error() {
+        let mut env = Environment::new();
+        let mut input = MockInputReader::new(vec![]);
+        let mut output = FailingOutputWriter;
+
+        let stmt = Statement::Error {
+            message: Expr::StrLit {
+                value: "error".to_string(),
+            },
+        };
+
+        let result = exec_statement(&stmt, &mut env, &mut input, &mut output);
+        assert!(matches!(result, Err(RuntimeError::IoError { .. })));
     }
 }

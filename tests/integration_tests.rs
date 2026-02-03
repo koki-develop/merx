@@ -51,16 +51,19 @@ impl MockOutputWriter {
 }
 
 impl OutputWriter for MockOutputWriter {
-    fn write_stdout(&mut self, s: &str) {
+    fn write_stdout(&mut self, s: &str) -> Result<(), RuntimeError> {
         self.stdout.push(s.to_string());
+        Ok(())
     }
 
-    fn write_stdout_no_newline(&mut self, s: &str) {
+    fn write_stdout_no_newline(&mut self, s: &str) -> Result<(), RuntimeError> {
         self.stdout.push(s.to_string());
+        Ok(())
     }
 
-    fn write_stderr(&mut self, s: &str) {
+    fn write_stderr(&mut self, s: &str) -> Result<(), RuntimeError> {
         self.stderr.push(s.to_string());
+        Ok(())
     }
 }
 

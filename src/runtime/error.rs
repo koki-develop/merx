@@ -27,7 +27,7 @@
 //! - [`NodeNotFound`](RuntimeError::NodeNotFound) - Edge references non-existent node
 //!
 //! ## I/O Errors
-//! - [`IoError`](RuntimeError::IoError) - Failed to read input
+//! - [`IoError`](RuntimeError::IoError) - Failed to read input or write output
 
 use std::fmt;
 
@@ -158,7 +158,7 @@ pub enum RuntimeError {
 
     /// I/O operation failed.
     ///
-    /// This wraps errors from reading user input or other I/O operations.
+    /// This wraps errors from reading user input, writing output, or other I/O operations.
     ///
     /// # Fields
     ///

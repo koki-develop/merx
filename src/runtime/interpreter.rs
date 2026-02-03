@@ -254,7 +254,7 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
     ///
     /// - Statement execution errors (type mismatch, undefined variable, etc.)
     /// - Navigation errors (missing edge, missing node)
-    /// - I/O errors (input reading failed)
+    /// - I/O errors (input reading or output writing failed)
     ///
     /// # Examples
     ///
@@ -449,16 +449,19 @@ mod tests {
     }
 
     impl OutputWriter for MockOutputWriter {
-        fn write_stdout(&mut self, s: &str) {
+        fn write_stdout(&mut self, s: &str) -> Result<(), RuntimeError> {
             self.stdout.push(s.to_string());
+            Ok(())
         }
 
-        fn write_stdout_no_newline(&mut self, s: &str) {
+        fn write_stdout_no_newline(&mut self, s: &str) -> Result<(), RuntimeError> {
             self.stdout.push(s.to_string());
+            Ok(())
         }
 
-        fn write_stderr(&mut self, s: &str) {
+        fn write_stderr(&mut self, s: &str) -> Result<(), RuntimeError> {
             self.stderr.push(s.to_string());
+            Ok(())
         }
     }
 
@@ -1221,5 +1224,40 @@ mod tests {
 
         // x = 3: C1(>=1 Yes) -> C2(>=2 Yes) -> C3(>=3 Yes) -> C4(>=4 No) -> P2 "level 3"
         assert_eq!(interpreter.output_writer.stdout, vec!["level 3"]);
+    }
+
+    /// Output writer that always fails, for testing error propagation.
+    struct FailingOutputWriter;
+
+    impl OutputWriter for FailingOutputWriter {
+        fn write_stdout(&mut self, _s: &str) -> Result<(), RuntimeError> {
+            Err(RuntimeError::IoError {
+                message: "stdout write failed".to_string(),
+            })
+        }
+
+        fn write_stdout_no_newline(&mut self, _s: &str) -> Result<(), RuntimeError> {
+            Err(RuntimeError::IoError {
+                message: "stdout write failed".to_string(),
+            })
+        }
+
+        fn write_stderr(&mut self, _s: &str) -> Result<(), RuntimeError> {
+            Err(RuntimeError::IoError {
+                message: "stderr write failed".to_string(),
+            })
+        }
+    }
+
+    #[test]
+    fn test_interpreter_propagates_write_error() {
+        let flowchart = create_simple_flowchart();
+        let input = MockInputReader::new(vec![]);
+        let output = FailingOutputWriter;
+
+        let mut interpreter = Interpreter::with_io(flowchart, input, output).unwrap();
+        let result = interpreter.run();
+
+        assert!(matches!(result, Err(RuntimeError::IoError { .. })));
     }
 }
