@@ -10,6 +10,12 @@ flowchart TD
     A --> End([End])
 ```
 
+```mermaid
+flowchart TD
+    Start([Start]) --> A[println 'Hello, merx!']
+    A --> End([End])
+```
+
 Run it:
 
 ```console
