@@ -38,9 +38,9 @@ brew install koki-develop/tap/merx
 
 Download the binary from [GitHub Releases](https://github.com/koki-develop/merx/releases).
 
-## Examples
+## Documentation
 
-See the [examples](./examples) directory.
+For more details, see the [documentation](https://koki-develop.github.io/merx/).
 
 ## License
 
