@@ -438,7 +438,8 @@ fn parse_edge_label(pair: Pair<Rule>) -> Result<EdgeLabel, SyntaxError> {
         .into_inner()
         .next()
         .ok_or_else(|| SyntaxError::new("internal: expected label_text in edge_label"))?
-        .as_str();
+        .as_str()
+        .trim();
     Ok(match label_text.to_lowercase().as_str() {
         "yes" => EdgeLabel::Yes,
         "no" => EdgeLabel::No,
@@ -2303,6 +2304,54 @@ flowchart TD
         assert_eq!(
             err.to_string(),
             "Validation error: Undefined node 'B' referenced in edge from 'A' to 'B'"
+        );
+    }
+
+    #[test]
+    fn test_parse_edge_label_with_spaces_around_yes() {
+        let input = r#"flowchart TD
+    Start --> A{x > 0?}
+    A -->| Yes | B[println x]
+    A -->| No | End
+    B --> End
+"#;
+        let result = parse(input);
+        assert!(
+            result.is_ok(),
+            "Should parse edge labels with spaces around Yes/No"
+        );
+        let flowchart = result.unwrap();
+        let yes_edge = flowchart
+            .edges
+            .iter()
+            .find(|e| e.from == "A" && e.to == "B");
+        assert!(matches!(yes_edge.unwrap().label, Some(EdgeLabel::Yes)));
+        let no_edge = flowchart
+            .edges
+            .iter()
+            .find(|e| e.from == "A" && e.to == "End");
+        assert!(matches!(no_edge.unwrap().label, Some(EdgeLabel::No)));
+    }
+
+    #[test]
+    fn test_parse_edge_label_with_interior_whitespace() {
+        let input = r#"flowchart TD
+    Start --> A[println 'hello']
+    A -->|Hello World| End
+"#;
+        let result = parse(input);
+        assert!(
+            result.is_ok(),
+            "Should parse edge labels with interior whitespace"
+        );
+        let flowchart = result.unwrap();
+        let edge = flowchart
+            .edges
+            .iter()
+            .find(|e| e.from == "A" && e.to == "End");
+        assert_eq!(
+            edge.unwrap().label,
+            Some(EdgeLabel::Custom("Hello World".to_string()))
         );
     }
 }

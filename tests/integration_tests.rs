@@ -343,6 +343,18 @@ mod invalid_flowcharts {
     }
 
     #[test]
+    fn test_whitespace_only_edge_label() {
+        let source = include_str!("fixtures/invalid/whitespace_only_edge_label.mmd");
+        let result = parser::parse(source);
+
+        assert!(
+            result.is_err(),
+            "Should fail to parse whitespace-only edge label"
+        );
+        assert!(matches!(result.unwrap_err(), AnalysisError::Syntax(_)));
+    }
+
+    #[test]
     fn test_missing_yes_edge() {
         let source = include_str!("fixtures/invalid/missing_yes_edge.mmd");
         let result = parser::parse(source);
