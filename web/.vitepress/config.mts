@@ -32,14 +32,16 @@ export default withMermaid(
               link: "/guide/program-structure",
             },
             { text: "Nodes and Edges", link: "/guide/nodes-and-edges" },
-            { text: "Output", link: "/guide/output" },
+            {
+              text: "Built-in Functions",
+              link: "/guide/built-in-functions",
+            },
             {
               text: "Variables and Types",
               link: "/guide/variables-and-types",
             },
             { text: "Operators", link: "/guide/operators" },
             { text: "Control Flow", link: "/guide/control-flow" },
-            { text: "Input", link: "/guide/input" },
           ],
         },
         {

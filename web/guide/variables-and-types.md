@@ -10,7 +10,56 @@ merx has three types:
 | `str` | UTF-8 string | `'hello'`, `''` |
 | `bool` | Boolean | `true`, `false` |
 
-There are no implicit type conversions. To convert between types, use the `as` operator (see [Operators](./operators.md)).
+There are no implicit type conversions. To convert between types, use the `as` operator (see [Type Casting](#type-casting)).
+
+### String Literals
+
+Strings are enclosed in single quotes:
+
+```
+'Hello, World!'
+'merx'
+''
+```
+
+#### Escape Sequences
+
+The following escape sequences are available inside string literals:
+
+| Sequence | Meaning |
+|----------|---------|
+| `\\'` | Single quote |
+| `\\\\` | Backslash |
+| `\\n` | Newline (LF) |
+| `\\t` | Tab |
+| `\\r` | Carriage return (CR) |
+| `\\0` | Null character |
+| `\\xHH` | Hex byte value |
+
+A bare `\` or `'` inside a string is not allowed; you must use the escape sequence.
+
+Example:
+
+```mmd
+flowchart TD
+    Start --> A[println 'line1\\nline2']
+    A --> B[println 'it\\'s merx']
+    B --> End
+```
+
+```mermaid
+flowchart TD
+    Start --> A[println 'line1\\nline2']
+    A --> B[println 'it\\'s merx']
+    B --> End
+```
+
+```console
+$ merx run escape.mmd
+line1
+line2
+it's merx
+```
 
 ## Variables
 
@@ -108,3 +157,46 @@ $ merx run multi.mmd
 ```
 
 Statements are executed in order from left to right.
+
+## Type Casting
+
+The `as` operator converts a value to a different type:
+
+```
+expression as type
+```
+
+| From | To | Behavior |
+|------|----|----------|
+| `int` | `int` | No-op |
+| `str` | `int` | Parses as decimal. Runtime error on failure |
+| `bool` | `int` | **Error** (not supported) |
+| `int` | `str` | Converts to decimal string |
+| `str` | `str` | No-op |
+| `bool` | `str` | `'true'` or `'false'` |
+
+There is no `bool` cast target in the language.
+
+```mmd
+flowchart TD
+    Start --> A[x = 42 as str]
+    A --> B[println 'The answer is ' + x]
+    B --> C[y = '123' as int]
+    C --> D[println y + 1]
+    D --> End
+```
+
+```mermaid
+flowchart TD
+    Start --> A[x = 42 as str]
+    A --> B[println 'The answer is ' + x]
+    B --> C[y = '123' as int]
+    C --> D[println y + 1]
+    D --> End
+```
+
+```console
+$ merx run cast.mmd
+The answer is 42
+124
+```

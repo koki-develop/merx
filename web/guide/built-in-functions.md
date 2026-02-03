@@ -1,6 +1,90 @@
-# Input
+# Built-in Functions
 
-## The `input` Expression
+## Output
+
+merx provides three output statements: `println`, `print`, and `error`.
+
+### println
+
+Prints the value of an expression to standard output, followed by a newline:
+
+```mmd
+flowchart TD
+    Start --> A[println 'Hello!']
+    A --> End
+```
+
+```mermaid
+flowchart TD
+    Start --> A[println 'Hello!']
+    A --> End
+```
+
+```console
+$ merx run hello.mmd
+Hello!
+```
+
+### print
+
+Prints the value of an expression to standard output **without** a trailing newline:
+
+```mmd
+flowchart TD
+    Start --> A[print 'Hello, ']
+    A --> B[println 'World!']
+    B --> End
+```
+
+```mermaid
+flowchart TD
+    Start --> A[print 'Hello, ']
+    A --> B[println 'World!']
+    B --> End
+```
+
+```console
+$ merx run hello.mmd
+Hello, World!
+```
+
+### error
+
+Prints the value of an expression to **standard error**, followed by a newline. Execution continues normally after the `error` statement:
+
+```mmd
+flowchart TD
+    Start --> A[error 'something went wrong']
+    A --> B[println 'still running']
+    B --> End
+```
+
+```mermaid
+flowchart TD
+    Start --> A[error 'something went wrong']
+    A --> B[println 'still running']
+    B --> End
+```
+
+```console
+$ merx run error.mmd
+something went wrong
+still running
+```
+
+### Output Format
+
+Each type has a specific output format:
+
+| Type | Format | Example |
+|------|--------|---------|
+| `int` | Decimal number | `42`, `-17` |
+| `str` | The string itself (no quotes) | `hello` |
+| `bool` | `true` or `false` | `true` |
+
+## Input
+
+### The `input` Expression
 
 The `input` expression reads a single line from standard input and returns it as a string:
 
@@ -29,7 +113,7 @@ Hello, merx!
 - Trailing newline characters (`\r`, `\n`) are stripped
 - If the input reaches EOF, an empty string is returned
 
-## Converting Input Types
+### Converting Input Types
 
 Since `input` always returns a string, use the `as` operator to convert it to the desired type:
 
@@ -57,7 +141,7 @@ Enter a number: 21
 
 If the input cannot be converted (e.g., `'abc' as int`), a runtime error occurs.
 
-## Practical Example: Sum Calculator
+### Practical Example: Sum Calculator
 
 This program reads numbers from the user until they enter `0`, then prints the sum:
 

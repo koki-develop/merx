@@ -32,7 +32,7 @@ Pure documentation site with no custom components or scripts. All content is Mar
 - `.vitepress/config.mts` - VitePress configuration (base path `/merx/`, nav, sidebar, mermaid plugin)
 - `index.md` - Home page (VitePress hero layout)
 - `getting-started/` - Installation and quick start guides
-- `guide/` - Language reference (program structure, nodes/edges, variables/types, operators, output, input, control flow)
+- `guide/` - Language reference (program structure, nodes/edges, built-in functions, variables/types, operators, control flow)
 - `examples.md` - Executable program examples (Fibonacci, FizzBuzz)
 
 ## Conventions
