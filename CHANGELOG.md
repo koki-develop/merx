@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.0](https://github.com/koki-develop/merx/compare/v0.0.4...v0.1.0) (2026-02-03)
+
+
+### Features
+
+* Add escape sequence support for string literals ([9eb0f7a](https://github.com/koki-develop/merx/commit/9eb0f7a2e414229aed2a657d5e51e0de577b07ce))
+* Add escape sequence support for string literals ([6fd27d6](https://github.com/koki-develop/merx/commit/6fd27d6384be57599e5ee5fd20e5788e20ad8d2a))
+* Add optional double-quote support for node labels ([7d601ca](https://github.com/koki-develop/merx/commit/7d601ca33fa7c50b64bfd694fcd7f75cef480303))
+* Allow whitespace in edge labels ([4ff6835](https://github.com/koki-develop/merx/commit/4ff68356d7c7298c23f75d25227dbb5facbba202))
+* Detect duplicate node definitions at parse time ([034f2b8](https://github.com/koki-develop/merx/commit/034f2b868ae3e65122a058f44e6f1d961dc411aa))
+* Detect undefined node references at parse time ([e8465ed](https://github.com/koki-develop/merx/commit/e8465ed6e8045a37396a6f69015b1d4567fa5a57))
+* Propagate I/O errors from OutputWriter instead of silently ignoring them ([e791537](https://github.com/koki-develop/merx/commit/e7915372054287b5fe0609809c7ecb16227160ad))
+* Support arbitrary-length arrows in edge definitions ([e7aa496](https://github.com/koki-develop/merx/commit/e7aa496b260f2d429cefd05320c9f66b73776326))
+* Support exit code specification via edge labels to End node ([55eb116](https://github.com/koki-develop/merx/commit/55eb116b402af6a46747394913d529c47c45dc00))
+* Support inline label syntax (--text--&gt;) for edge definitions ([4c676b4](https://github.com/koki-develop/merx/commit/4c676b48597a906eb0e229b729d9fa969a7ce619))
+* Support string concatenation with the `+` operator ([6050175](https://github.com/koki-develop/merx/commit/6050175ed2d0fbf42a3d4c3ad555559ef41950a6))
+* Validate Start/End node existence at parse time ([a180bc1](https://github.com/koki-develop/merx/commit/a180bc1925313d2303c8564a1f81cc64039391f3))
+
 ## [0.0.4](https://github.com/koki-develop/merx/compare/v0.0.3...v0.0.4) (2026-02-03)
 
 
