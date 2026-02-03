@@ -43,7 +43,14 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-      - run: cargo test --locked
+      - run: rustup component add llvm-tools-preview
+      - run: cargo install cargo-llvm-cov --locked
+      - run: cargo llvm-cov --locked --codecov --output-path codecov.json
+      - uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./codecov.json
+          fail_ci_if_error: true
 
   build:
     name: Build
