@@ -5,21 +5,12 @@ layout: home
 hero:
   name: "merx"
   text: "Run your flowcharts."
-  tagline: My great project tagline
+  tagline: An interpreter for programs written in Mermaid flowchart syntax
   actions:
     - theme: brand
-      text: Markdown Examples
-      link: /markdown-examples
+      text: Getting Started
+      link: /getting-started/installation
     - theme: alt
-      text: API Examples
-      link: /api-examples
-
-features:
-  - title: Feature A
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
-  - title: Feature B
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
-  - title: Feature C
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
+      text: Examples
+      link: /examples
 ---
-
