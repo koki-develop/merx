@@ -6,7 +6,7 @@ This example prints the Fibonacci sequence up to the `n`-th term, where `n` is p
 
 ### Flowchart
 
-```mermaid
+```mmd
 flowchart TD
     Start([Start]) --> A[print 'Enter a positive integer: ']
     A --> B[n = input as int]
@@ -55,7 +55,7 @@ This example prints the numbers from 1 to 100, replacing multiples of 3 with "Fi
 
 ### Flowchart
 
-```mermaid
+```mmd
 flowchart TD
     Start([Start]) --> A[n = 1]
     A --> B{n <= 100?}

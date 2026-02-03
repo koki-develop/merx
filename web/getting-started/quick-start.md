@@ -4,7 +4,7 @@
 
 Create a file named `hello.mmd` with the following content:
 
-```mermaid
+```mmd
 flowchart TD
     Start([Start]) --> A[println 'Hello, merx!']
     A --> End([End])
