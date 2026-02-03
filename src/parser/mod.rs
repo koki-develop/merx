@@ -848,17 +848,8 @@ fn parse_primary(pair: Pair<Rule>) -> Result<Expr, ParseError> {
 
 /// Processes escape sequences in a raw string extracted from between quotes.
 ///
-/// The escape mechanism uses double-backslash (`\\`) as a prefix:
-/// - `\\'` (two backslashes + single quote) → literal `'`
-/// - `\\\\` (four backslashes) → literal `\\` (two backslashes)
-///
-/// # Arguments
-///
-/// * `raw` - The raw string content between the surrounding single quotes
-///
-/// # Returns
-///
-/// The unescaped string with escape sequences replaced.
+/// Supports: `\\'`, `\\\\`, `\\n`, `\\t`, `\\r`, `\\0`, `\\xHH`.
+/// The grammar guarantees that only valid escape sequences reach this function.
 fn unescape_string(raw: &str) -> String {
     let mut result = String::with_capacity(raw.len());
     let mut chars = raw.chars();
@@ -866,7 +857,7 @@ fn unescape_string(raw: &str) -> String {
     while let Some(c) = chars.next() {
         if c == '\\' {
             // Grammar guarantees: first `\` is always followed by a second `\`,
-            // then either `'` or `\\`.
+            // then a valid escape specifier.
             chars.next(); // consume the second `\`
             match chars.next() {
                 Some('\'') => result.push('\''),
@@ -874,6 +865,15 @@ fn unescape_string(raw: &str) -> String {
                     chars.next(); // consume the fourth `\`
                     result.push('\\');
                     result.push('\\');
+                }
+                Some('n') => result.push('\n'),
+                Some('t') => result.push('\t'),
+                Some('r') => result.push('\r'),
+                Some('0') => result.push('\0'),
+                Some('x') => {
+                    let h1 = chars.next().unwrap().to_digit(16).unwrap() as u8;
+                    let h2 = chars.next().unwrap().to_digit(16).unwrap() as u8;
+                    result.push((h1 * 16 + h2) as char);
                 }
                 _ => unreachable!("grammar guarantees valid escape sequence"),
             }
@@ -1766,9 +1766,8 @@ flowchart TD
         assert_eq!(unescape_string("\\\\' \\\\\\\\"), "' \\\\");
     }
 
-    #[test]
-    fn test_parse_string_with_escaped_quote() {
-        let input = "flowchart TD\n    Start --> A[println 'it\\\\'s a test']\n    A --> End\n";
+    /// Parses a flowchart and extracts the string value from the first Println statement.
+    fn parse_println_str(input: &str) -> String {
         let flowchart = parse(input).unwrap();
         let process = flowchart
             .nodes
@@ -1778,7 +1777,7 @@ flowchart TD
         match process {
             Node::Process { statements, .. } => match &statements[0] {
                 Statement::Println { expr } => match expr {
-                    Expr::StrLit { value } => assert_eq!(value, "it's a test"),
+                    Expr::StrLit { value } => value.clone(),
                     _ => panic!("Expected StrLit"),
                 },
                 _ => panic!("Expected Println"),
@@ -1788,24 +1787,15 @@ flowchart TD
     }
 
     #[test]
+    fn test_parse_string_with_escaped_quote() {
+        let input = "flowchart TD\n    Start --> A[println 'it\\\\'s a test']\n    A --> End\n";
+        assert_eq!(parse_println_str(input), "it's a test");
+    }
+
+    #[test]
     fn test_parse_string_with_escaped_backslash() {
         let input = "flowchart TD\n    Start --> A[println 'backslash: \\\\\\\\']\n    A --> End\n";
-        let flowchart = parse(input).unwrap();
-        let process = flowchart
-            .nodes
-            .iter()
-            .find(|n| matches!(n, Node::Process { .. }))
-            .unwrap();
-        match process {
-            Node::Process { statements, .. } => match &statements[0] {
-                Statement::Println { expr } => match expr {
-                    Expr::StrLit { value } => assert_eq!(value, "backslash: \\\\"),
-                    _ => panic!("Expected StrLit"),
-                },
-                _ => panic!("Expected Println"),
-            },
-            _ => unreachable!(),
-        }
+        assert_eq!(parse_println_str(input), "backslash: \\\\");
     }
 
     #[test]
@@ -1841,24 +1831,79 @@ flowchart TD
 
     #[test]
     fn test_parse_escaped_quote_in_double_quoted_node() {
-        // Escape sequences should work inside double-quoted process node labels
         let input =
             "flowchart TD\n    Start --> A[\"println 'it\\\\'s working'\"]\n    A --> End\n";
-        let flowchart = parse(input).unwrap();
-        let process = flowchart
-            .nodes
-            .iter()
-            .find(|n| matches!(n, Node::Process { .. }))
-            .unwrap();
-        match process {
-            Node::Process { statements, .. } => match &statements[0] {
-                Statement::Println { expr } => match expr {
-                    Expr::StrLit { value } => assert_eq!(value, "it's working"),
-                    _ => panic!("Expected StrLit"),
-                },
-                _ => panic!("Expected Println"),
-            },
-            _ => unreachable!(),
-        }
+        assert_eq!(parse_println_str(input), "it's working");
+    }
+
+    #[test]
+    fn test_unescape_string_newline() {
+        assert_eq!(unescape_string("\\\\n"), "\n");
+    }
+
+    #[test]
+    fn test_unescape_string_tab() {
+        assert_eq!(unescape_string("\\\\t"), "\t");
+    }
+
+    #[test]
+    fn test_unescape_string_carriage_return() {
+        assert_eq!(unescape_string("\\\\r"), "\r");
+    }
+
+    #[test]
+    fn test_unescape_string_null() {
+        assert_eq!(unescape_string("\\\\0"), "\0");
+    }
+
+    #[test]
+    fn test_unescape_string_hex_uppercase() {
+        // \\x41 -> 'A'
+        assert_eq!(unescape_string("\\\\x41"), "A");
+    }
+
+    #[test]
+    fn test_unescape_string_hex_lowercase() {
+        // \\x0a -> newline
+        assert_eq!(unescape_string("\\\\x0a"), "\n");
+    }
+
+    #[test]
+    fn test_unescape_string_hex_mixed_case() {
+        // \\x0A -> newline
+        assert_eq!(unescape_string("\\\\x0A"), "\n");
+    }
+
+    #[test]
+    fn test_unescape_string_multiple_new_escapes() {
+        assert_eq!(unescape_string("hello\\\\nworld"), "hello\nworld");
+    }
+
+    #[test]
+    fn test_unescape_string_all_escapes_combined() {
+        assert_eq!(unescape_string("\\\\n\\\\t\\\\r\\\\0"), "\n\t\r\0");
+    }
+
+    #[test]
+    fn test_unescape_string_hex_high_value() {
+        // \\xFF -> U+00FF
+        assert_eq!(unescape_string("\\\\xFF"), "\u{FF}");
+    }
+
+    #[test]
+    fn test_unescape_string_hex_zero() {
+        // \\x00 -> null (same as \\0)
+        assert_eq!(unescape_string("\\\\x00"), "\0");
+    }
+
+    #[test]
+    fn test_parse_string_with_invalid_hex_incomplete() {
+        // \\x with only one hex digit should cause a parse error
+        let input = "flowchart TD\n    Start --> A[println 'hello\\\\x4world']\n    A --> End\n";
+        let result = parse(input);
+        assert!(
+            result.is_err(),
+            "Incomplete hex escape should cause parse error"
+        );
     }
 }

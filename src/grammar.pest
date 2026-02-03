@@ -76,7 +76,12 @@ binary_op = {
 bool_lit = { "true" | "false" }
 int_lit = @{ ASCII_DIGIT+ }
 string_lit = ${ "'" ~ string_inner ~ "'" }
-string_inner = @{ ("\\\\" ~ ("'" | "\\\\") | !("'" | "\\") ~ ANY)* }
+string_inner = @{
+    (
+        "\\\\" ~ ("'" | "\\\\" | "n" | "t" | "r" | "0" | "x" ~ ASCII_HEX_DIGIT{2})
+        | !("'" | "\\") ~ ANY
+    )*
+}
 
 // Types
 type_name = { "int" | "str" }

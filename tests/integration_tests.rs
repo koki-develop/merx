@@ -218,6 +218,69 @@ mod valid_flowcharts {
         assert_eq!(stdout, vec!["backslash: \\\\"]);
         assert!(stderr.is_empty());
     }
+
+    #[test]
+    fn test_escape_newline() {
+        let source = include_str!("fixtures/valid/escape_newline.mmd");
+        let (stdout, stderr) = run_flowchart(source).expect("Should execute successfully");
+
+        assert_eq!(stdout, vec!["hello\nworld"]);
+        assert!(stderr.is_empty());
+    }
+
+    #[test]
+    fn test_escape_tab() {
+        let source = include_str!("fixtures/valid/escape_tab.mmd");
+        let (stdout, stderr) = run_flowchart(source).expect("Should execute successfully");
+
+        assert_eq!(stdout, vec!["col1\tcol2"]);
+        assert!(stderr.is_empty());
+    }
+
+    #[test]
+    fn test_escape_hex() {
+        let source = include_str!("fixtures/valid/escape_hex.mmd");
+        let (stdout, stderr) = run_flowchart(source).expect("Should execute successfully");
+
+        assert_eq!(stdout, vec!["Hello"]);
+        assert!(stderr.is_empty());
+    }
+
+    #[test]
+    fn test_escape_carriage_return() {
+        let source = include_str!("fixtures/valid/escape_carriage_return.mmd");
+        let (stdout, stderr) = run_flowchart(source).expect("Should execute successfully");
+
+        assert_eq!(stdout, vec!["hello\rworld"]);
+        assert!(stderr.is_empty());
+    }
+
+    #[test]
+    fn test_escape_null() {
+        let source = include_str!("fixtures/valid/escape_null.mmd");
+        let (stdout, stderr) = run_flowchart(source).expect("Should execute successfully");
+
+        assert_eq!(stdout, vec!["hello\0world"]);
+        assert!(stderr.is_empty());
+    }
+
+    #[test]
+    fn test_escape_mixed() {
+        let source = include_str!("fixtures/valid/escape_mixed.mmd");
+        let (stdout, stderr) = run_flowchart(source).expect("Should execute successfully");
+
+        assert_eq!(stdout, vec!["a\nb\tc\r\0d"]);
+        assert!(stderr.is_empty());
+    }
+
+    #[test]
+    fn test_escape_equivalence() {
+        let source = include_str!("fixtures/valid/escape_equivalence.mmd");
+        let (stdout, stderr) = run_flowchart(source).expect("Should execute successfully");
+
+        assert_eq!(stdout, vec!["equal"]);
+        assert!(stderr.is_empty());
+    }
 }
 
 // =============================================================================
@@ -299,6 +362,17 @@ mod invalid_flowcharts {
             err.to_string().contains("End node cannot have outgoing"),
             "Error should mention End node outgoing edge: {}",
             err
+        );
+    }
+
+    #[test]
+    fn test_invalid_hex_escape() {
+        let source = include_str!("fixtures/invalid/invalid_hex_escape.mmd");
+        let result = parser::parse(source);
+
+        assert!(
+            result.is_err(),
+            "Should fail to parse invalid hex escape sequence"
         );
     }
 }

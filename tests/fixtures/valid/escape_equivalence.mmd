@@ -1,0 +1,7 @@
+flowchart TD
+    Start --> A[x = '\\n'; y = '\\x0a']
+    A --> Check{x == y?}
+    Check -->|Yes| B[println 'equal']
+    Check -->|No| C[println 'not equal']
+    B --> End
+    C --> End
