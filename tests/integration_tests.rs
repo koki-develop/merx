@@ -566,6 +566,84 @@ mod complex_flowcharts {
 }
 
 // =============================================================================
+// Double-quoted label tests
+// =============================================================================
+
+mod double_quoted_labels {
+    use super::*;
+
+    #[test]
+    fn test_process_node_with_double_quotes() {
+        let source = r#"flowchart TD
+    Start --> A["println 'hello world'"]
+    A --> End
+"#;
+        let (stdout, stderr) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["hello world"]);
+        assert!(stderr.is_empty());
+    }
+
+    #[test]
+    fn test_condition_node_with_double_quotes() {
+        let source = r#"flowchart TD
+    Start --> Init[x = 5]
+    Init --> A{"x > 0?"}
+    A -->|Yes| B[println 'positive']
+    A -->|No| C[println 'non-positive']
+    B --> End
+    C --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["positive"]);
+    }
+
+    #[test]
+    fn test_stadium_label_with_double_quotes() {
+        let source = r#"flowchart TD
+    Start(["Begin"]) --> A[println 'hello']
+    A --> End(["Finish"])
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["hello"]);
+    }
+
+    #[test]
+    fn test_mixed_quoted_and_unquoted() {
+        let source = r#"flowchart TD
+    Start --> A["x = 42"]
+    A --> B[println x]
+    B --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["42"]);
+    }
+
+    #[test]
+    fn test_all_node_types_with_double_quotes() {
+        let source = r#"flowchart TD
+    Start(["Begin"]) --> Init["x = 10"]
+    Init --> Check{"x > 5?"}
+    Check -->|Yes| Print["println 'big'"]
+    Check -->|No| Print2["println 'small'"]
+    Print --> End(["Done"])
+    Print2 --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["big"]);
+    }
+
+    #[test]
+    fn test_double_quoted_multiple_statements() {
+        let source = r#"flowchart TD
+    Start --> A["x = 1; y = 2; println x + y"]
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["3"]);
+    }
+}
+
+// =============================================================================
 // Direction tests (parsing only, direction doesn't affect execution)
 // =============================================================================
 

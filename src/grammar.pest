@@ -24,10 +24,14 @@ node_ref = { node_with_def | bare_identifier }
 node_with_def = { start_node | end_node | process_node | condition_node }
 start_node = { "Start" ~ stadium_label? }
 end_node = { "End" ~ stadium_label? }
-stadium_label = { "([" ~ stadium_label_text ~ "])" }
+stadium_label = { "([" ~ "\"" ~ stadium_label_quoted_text ~ "\"" ~ "])"
+               | "([" ~ stadium_label_text ~ "])" }
 stadium_label_text = @{ (!"])" ~ ANY)* }
-process_node = { identifier ~ "[" ~ statements ~ "]" }
-condition_node = { identifier ~ "{" ~ expression ~ "?" ~ "}" }
+stadium_label_quoted_text = @{ (!"\"" ~ ANY)* }
+process_node = { identifier ~ "[" ~ "\"" ~ statements ~ "\"" ~ "]"
+               | identifier ~ "[" ~ statements ~ "]" }
+condition_node = { identifier ~ "{" ~ "\"" ~ expression ~ "?" ~ "\"" ~ "}"
+                 | identifier ~ "{" ~ expression ~ "?" ~ "}" }
 
 // Identifier
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }

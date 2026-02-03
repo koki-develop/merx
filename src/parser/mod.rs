@@ -1464,4 +1464,232 @@ flowchart TD
         let result = parse(input);
         assert!(result.is_ok(), "Should parse with %% inside comment");
     }
+
+    #[test]
+    fn test_parse_double_quoted_process_node() {
+        let input = r#"flowchart TD
+    Start --> A["println 'hello'"]
+    A --> End
+"#;
+        let result = parse(input);
+        assert!(result.is_ok(), "Should parse double-quoted process node");
+        let flowchart = result.unwrap();
+        let process = flowchart
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::Process { .. }))
+            .unwrap();
+        match process {
+            Node::Process { id, statements } => {
+                assert_eq!(id, "A");
+                assert_eq!(statements.len(), 1);
+                assert!(matches!(&statements[0], Statement::Println { .. }));
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn test_parse_double_quoted_condition_node() {
+        let input = r#"flowchart TD
+    Start --> A{"x > 0?"}
+    A -->|Yes| End
+    A -->|No| End
+"#;
+        let result = parse(input);
+        assert!(result.is_ok(), "Should parse double-quoted condition node");
+        let flowchart = result.unwrap();
+        let cond = flowchart
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::Condition { .. }))
+            .unwrap();
+        match cond {
+            Node::Condition { id, condition } => {
+                assert_eq!(id, "A");
+                assert!(matches!(
+                    condition,
+                    Expr::Binary {
+                        op: BinaryOp::Gt,
+                        ..
+                    }
+                ));
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn test_parse_double_quoted_stadium_label() {
+        let input = r#"flowchart TD
+    Start(["Begin"]) --> End(["Finish"])
+"#;
+        let result = parse(input);
+        assert!(result.is_ok(), "Should parse double-quoted stadium labels");
+        let flowchart = result.unwrap();
+        let start = flowchart
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::Start { .. }))
+            .unwrap();
+        match start {
+            Node::Start { label } => {
+                assert_eq!(label.as_deref(), Some("Begin"));
+            }
+            _ => unreachable!(),
+        }
+        let end = flowchart
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::End { .. }))
+            .unwrap();
+        match end {
+            Node::End { label } => {
+                assert_eq!(label.as_deref(), Some("Finish"));
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn test_parse_double_quoted_process_node_multiple_statements() {
+        let input = r#"flowchart TD
+    Start --> A["x = 1; y = 2; println x + y"]
+    A --> End
+"#;
+        let result = parse(input);
+        assert!(
+            result.is_ok(),
+            "Should parse double-quoted process node with multiple statements"
+        );
+        let flowchart = result.unwrap();
+        let process = flowchart
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::Process { .. }))
+            .unwrap();
+        match process {
+            Node::Process { statements, .. } => {
+                assert_eq!(statements.len(), 3);
+                assert!(
+                    matches!(&statements[0], Statement::Assign { variable, .. } if variable == "x")
+                );
+                assert!(
+                    matches!(&statements[1], Statement::Assign { variable, .. } if variable == "y")
+                );
+                assert!(matches!(&statements[2], Statement::Println { .. }));
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn test_parse_quoted_and_unquoted_produce_same_ast() {
+        let quoted = r#"flowchart TD
+    Start --> A["x = 42"]
+    A --> End
+"#;
+        let unquoted = r#"flowchart TD
+    Start --> A[x = 42]
+    A --> End
+"#;
+        let q = parse(quoted).unwrap();
+        let u = parse(unquoted).unwrap();
+
+        let q_process = q
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::Process { .. }))
+            .unwrap();
+        let u_process = u
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::Process { .. }))
+            .unwrap();
+
+        let q_json = serde_json::to_string(q_process).unwrap();
+        let u_json = serde_json::to_string(u_process).unwrap();
+        assert_eq!(
+            q_json, u_json,
+            "Quoted and unquoted should produce the same AST"
+        );
+    }
+
+    #[test]
+    fn test_parse_quoted_and_unquoted_condition_produce_same_ast() {
+        let quoted = r#"flowchart TD
+    Start --> A{"x > 0?"}
+    A -->|Yes| End
+    A -->|No| End
+"#;
+        let unquoted = r#"flowchart TD
+    Start --> A{x > 0?}
+    A -->|Yes| End
+    A -->|No| End
+"#;
+        let q = parse(quoted).unwrap();
+        let u = parse(unquoted).unwrap();
+
+        let q_cond = q
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::Condition { .. }))
+            .unwrap();
+        let u_cond = u
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::Condition { .. }))
+            .unwrap();
+
+        let q_json = serde_json::to_string(q_cond).unwrap();
+        let u_json = serde_json::to_string(u_cond).unwrap();
+        assert_eq!(
+            q_json, u_json,
+            "Quoted and unquoted condition should produce the same AST"
+        );
+    }
+
+    #[test]
+    fn test_parse_quoted_and_unquoted_stadium_label_produce_same_ast() {
+        let quoted = r#"flowchart TD
+    Start(["Begin"]) --> End(["Finish"])
+"#;
+        let unquoted = r#"flowchart TD
+    Start([Begin]) --> End([Finish])
+"#;
+        let q = parse(quoted).unwrap();
+        let u = parse(unquoted).unwrap();
+
+        let q_start = q
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::Start { .. }))
+            .unwrap();
+        let u_start = u
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::Start { .. }))
+            .unwrap();
+        assert_eq!(
+            serde_json::to_string(q_start).unwrap(),
+            serde_json::to_string(u_start).unwrap(),
+            "Quoted and unquoted Start stadium labels should produce the same AST"
+        );
+
+        let q_end = q
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::End { .. }))
+            .unwrap();
+        let u_end = u
+            .nodes
+            .iter()
+            .find(|n| matches!(n, Node::End { .. }))
+            .unwrap();
+        assert_eq!(
+            serde_json::to_string(q_end).unwrap(),
+            serde_json::to_string(u_end).unwrap(),
+            "Quoted and unquoted End stadium labels should produce the same AST"
+        );
+    }
 }
