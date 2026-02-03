@@ -5,6 +5,8 @@
 //! Expressions are used in assignments, print statements, error statements,
 //! and condition nodes.
 
+use std::fmt;
+
 /// An expression that can be evaluated to produce a value.
 ///
 /// Expressions are the building blocks for computations in merx. They can
@@ -212,6 +214,15 @@ pub enum UnaryOp {
     Neg,
 }
 
+impl fmt::Display for UnaryOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UnaryOp::Not => write!(f, "logical NOT (!)"),
+            UnaryOp::Neg => write!(f, "negation (-)"),
+        }
+    }
+}
+
 /// A binary operator.
 ///
 /// Binary operators take two operands and produce a result. Operators are
@@ -300,6 +311,26 @@ pub enum BinaryOp {
     ///
     /// Boolean || Boolean → Boolean
     Or,
+}
+
+impl fmt::Display for BinaryOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BinaryOp::Add => write!(f, "addition (+)"),
+            BinaryOp::Sub => write!(f, "subtraction (-)"),
+            BinaryOp::Mul => write!(f, "multiplication (*)"),
+            BinaryOp::Div => write!(f, "division (/)"),
+            BinaryOp::Mod => write!(f, "modulo (%)"),
+            BinaryOp::Eq => write!(f, "equality (==)"),
+            BinaryOp::Ne => write!(f, "inequality (!=)"),
+            BinaryOp::Lt => write!(f, "less than (<)"),
+            BinaryOp::Le => write!(f, "less than or equal (<=)"),
+            BinaryOp::Gt => write!(f, "greater than (>)"),
+            BinaryOp::Ge => write!(f, "greater than or equal (>=)"),
+            BinaryOp::And => write!(f, "logical AND (&&)"),
+            BinaryOp::Or => write!(f, "logical OR (||)"),
+        }
+    }
 }
 
 /// A type name for type casting.

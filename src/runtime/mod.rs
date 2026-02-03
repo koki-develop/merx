@@ -54,6 +54,8 @@ mod error;
 mod eval;
 mod exec;
 mod interpreter;
+#[cfg(test)]
+pub(crate) mod test_helpers;
 mod value;
 
 pub use env::Environment;

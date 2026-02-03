@@ -332,12 +332,12 @@ fn eval_binary(op: BinaryOp, left: Value, right: Value) -> Result<Value, Runtime
             let l = left.as_int().ok_or_else(|| RuntimeError::TypeError {
                 expected: "int",
                 actual: left.type_name(),
-                operation: format!("{:?}", op),
+                operation: op.to_string(),
             })?;
             let r = right.as_int().ok_or_else(|| RuntimeError::TypeError {
                 expected: "int",
                 actual: right.type_name(),
-                operation: format!("{:?}", op),
+                operation: op.to_string(),
             })?;
             let result = match op {
                 BinaryOp::Sub => l.wrapping_sub(r),
@@ -368,12 +368,12 @@ fn eval_binary(op: BinaryOp, left: Value, right: Value) -> Result<Value, Runtime
             let l = left.as_int().ok_or_else(|| RuntimeError::TypeError {
                 expected: "int",
                 actual: left.type_name(),
-                operation: format!("{:?}", op),
+                operation: op.to_string(),
             })?;
             let r = right.as_int().ok_or_else(|| RuntimeError::TypeError {
                 expected: "int",
                 actual: right.type_name(),
-                operation: format!("{:?}", op),
+                operation: op.to_string(),
             })?;
             let result = match op {
                 BinaryOp::Lt => l < r,
@@ -390,12 +390,12 @@ fn eval_binary(op: BinaryOp, left: Value, right: Value) -> Result<Value, Runtime
             let l = left.as_bool().ok_or_else(|| RuntimeError::TypeError {
                 expected: "bool",
                 actual: left.type_name(),
-                operation: format!("{:?}", op),
+                operation: op.to_string(),
             })?;
             let r = right.as_bool().ok_or_else(|| RuntimeError::TypeError {
                 expected: "bool",
                 actual: right.type_name(),
-                operation: format!("{:?}", op),
+                operation: op.to_string(),
             })?;
             let result = match op {
                 BinaryOp::And => l && r,
@@ -460,36 +460,8 @@ fn eval_cast(val: Value, target: TypeName) -> Result<Value, RuntimeError> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::MockInputReader;
     use super::*;
-
-    /// Mock input reader for testing.
-    struct MockInputReader {
-        lines: Vec<String>,
-        index: usize,
-    }
-
-    impl MockInputReader {
-        fn new(lines: Vec<&str>) -> Self {
-            Self {
-                lines: lines.into_iter().map(|s| s.to_string()).collect(),
-                index: 0,
-            }
-        }
-    }
-
-    impl InputReader for MockInputReader {
-        fn read_line(&mut self) -> Result<String, RuntimeError> {
-            if self.index < self.lines.len() {
-                let line = self.lines[self.index].clone();
-                self.index += 1;
-                Ok(line)
-            } else {
-                Err(RuntimeError::IoError {
-                    message: "No more input".to_string(),
-                })
-            }
-        }
-    }
 
     #[test]
     fn test_eval_int_literal() {
