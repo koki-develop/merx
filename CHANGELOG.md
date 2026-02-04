@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.4](https://github.com/koki-develop/merx/compare/v0.1.3...v0.1.4) (2026-02-04)
+
+
+### Bug Fixes
+
+* Accept &str in Environment::set() to avoid String clone on reassignment ([0b5ff6a](https://github.com/koki-develop/merx/commit/0b5ff6abf8e718e1207f96e74d0b859ea92bacb4))
+* Replace HashMap SipHash with FxHashMap for faster variable lookup ([826af9e](https://github.com/koki-develop/merx/commit/826af9ee29867a7d738307364004d2284a6115c6))
+* Return Cow&lt;Value&gt; from eval_expr to eliminate variable lookup clones ([e5b4ba4](https://github.com/koki-develop/merx/commit/e5b4ba47c4476be62d36c2aed399b8e2343ed163))
+
 ## [0.1.3](https://github.com/koki-develop/merx/compare/v0.1.2...v0.1.3) (2026-02-04)
 
 
