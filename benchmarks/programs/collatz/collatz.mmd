@@ -1,0 +1,16 @@
+flowchart TD
+    Start([Start]) --> Init[n = 10000; total = 0; i = 1]
+    Init --> OuterCond{i <= n?}
+    OuterCond -->|No| Print[println total]
+    Print --> End([End])
+    OuterCond -->|Yes| InnerInit[x = i; steps = 0]
+    InnerInit --> InnerCond{x != 1?}
+    InnerCond -->|No| AddSteps[total = total + steps]
+    AddSteps --> IncI[i = i + 1]
+    IncI --> OuterCond
+    InnerCond -->|Yes| CheckEven{x % 2 == 0?}
+    CheckEven -->|Yes| Halve[x = x / 2]
+    CheckEven -->|No| Triple[x = x * 3 + 1]
+    Halve --> IncSteps[steps = steps + 1]
+    Triple --> IncSteps
+    IncSteps --> InnerCond
