@@ -69,6 +69,7 @@ tests/
     ├── valid/       # Valid .mmd files for testing successful execution
     └── invalid/     # Invalid .mmd files for testing error handling
 
+dockerfiles/                     # Dockerfiles for pre-built binary images
 web/                             # VitePress documentation site (separate from Rust codebase)
 ```
 
@@ -124,6 +125,13 @@ Release artifacts:
 After release assets are uploaded, the `homebrew-tap` job automatically generates and pushes `merx.rb` to `koki-develop/homebrew-tap`. The formula is generated dynamically by downloading SHA256 checksums from the release and templating the Ruby file. Supported platforms for Homebrew (Windows excluded):
 - `x86_64-apple-darwin`, `aarch64-apple-darwin` (macOS)
 - `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu` (Linux)
+
+## Docker
+
+- Base image: `debian:bookworm-slim` (release binaries are glibc-linked, so Alpine is not compatible)
+- Multi-arch support: amd64 (`x86_64-unknown-linux-gnu`) and arm64 (`aarch64-unknown-linux-gnu`)
+- Binary is downloaded from GitHub Releases and verified against SHA256 checksum
+- Build: `docker build -f dockerfiles/bookworm-slim.Dockerfile --build-arg VERSION=<version> .`
 
 ## GitHub Actions Conventions
 
