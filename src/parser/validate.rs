@@ -1,11 +1,11 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use crate::ast::{Edge, EdgeLabel, Node};
 
 use super::error::ValidationError;
 
 pub(super) fn insert_node(
-    nodes: &mut HashMap<String, Node>,
+    nodes: &mut FxHashMap<String, Node>,
     node: Node,
 ) -> Result<(), ValidationError> {
     let node_id = node.id().to_string();
@@ -38,7 +38,7 @@ pub(super) fn insert_node(
 }
 
 pub(super) fn validate_flowchart(
-    nodes: &HashMap<String, Node>,
+    nodes: &FxHashMap<String, Node>,
     edges: &[Edge],
 ) -> Result<(), ValidationError> {
     // Validate: condition nodes must have both Yes and No edges
@@ -133,7 +133,7 @@ pub(super) fn validate_flowchart(
     }
 
     // Validate: Non-condition nodes must have at most one outgoing edge
-    let mut edge_counts: HashMap<String, usize> = HashMap::new();
+    let mut edge_counts: FxHashMap<String, usize> = FxHashMap::default();
     for edge in edges {
         *edge_counts.entry(edge.from.clone()).or_insert(0) += 1;
     }

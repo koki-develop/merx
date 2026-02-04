@@ -18,10 +18,13 @@
 //!
 //! # Implementation
 //!
-//! The environment uses a [`HashMap`] for O(1) average-case lookup
-//! and insertion.
+//! The environment uses `FxHashMap` (a non-cryptographic hash map) for
+//! O(1) average-case lookup and insertion. `FxHashMap` is faster than the
+//! standard `HashMap` for short keys like variable names, at the cost of
+//! no HashDoS resistance (acceptable since variable names come from trusted
+//! `.mmd` source files).
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use super::error::RuntimeError;
 use super::value::Value;
@@ -65,7 +68,7 @@ use super::value::Value;
 #[derive(Debug, Clone, Default)]
 pub struct Environment {
     /// Map from variable names to their current values.
-    variables: HashMap<String, Value>,
+    variables: FxHashMap<String, Value>,
 }
 
 impl Environment {

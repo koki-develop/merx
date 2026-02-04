@@ -47,11 +47,10 @@ mod error;
 mod expr;
 mod validate;
 
-use std::collections::HashMap;
-
 use pest::Parser;
 use pest::iterators::Pair;
 use pest_derive::Parser;
+use rustc_hash::FxHashMap;
 
 pub use error::{AnalysisError, SyntaxError, ValidationError};
 use expr::parse_expression;
@@ -130,7 +129,7 @@ pub fn parse(input: &str) -> Result<Flowchart, AnalysisError> {
     let pairs = MermaidParser::parse(Rule::flowchart, input)?;
 
     let mut direction = Direction::Td;
-    let mut nodes: HashMap<String, Node> = HashMap::new();
+    let mut nodes: FxHashMap<String, Node> = FxHashMap::default();
     let mut edges: Vec<Edge> = Vec::new();
 
     for pair in pairs {

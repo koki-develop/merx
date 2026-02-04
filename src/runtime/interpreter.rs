@@ -53,8 +53,9 @@
 //! interpreter.run().unwrap();
 //! ```
 
-use std::collections::HashMap;
 use std::io;
+
+use rustc_hash::FxHashMap;
 
 use crate::ast::{EdgeLabel, Flowchart, Node};
 
@@ -208,7 +209,7 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
         output_writer: W,
     ) -> Result<Self, RuntimeError> {
         // Build name-to-index mapping
-        let mut name_to_index: HashMap<String, usize> = HashMap::new();
+        let mut name_to_index: FxHashMap<String, usize> = FxHashMap::default();
         let mut start_index = None;
         let mut has_end = false;
 

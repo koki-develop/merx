@@ -107,7 +107,7 @@ web/                             # VitePress documentation site (separate from R
 - Entry point: `runtime::Interpreter::new(Flowchart) -> Result<Interpreter, RuntimeError>`
 - `Interpreter::run()` executes the flowchart from Start to End, returning the exit code (`Result<u8, RuntimeError>`)
 - `Value`: Runtime values (`Int(i64)`, `Str(String)`, `Bool(bool)`)
-- `Environment`: HashMap-based variable storage
+- `Environment`: FxHashMap-based variable storage
 - `InputReader` / `OutputWriter` traits for testability (dependency injection)
 
 ## Release Workflow
