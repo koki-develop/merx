@@ -1,0 +1,12 @@
+flowchart TD
+    Start([Start]) --> A[a = 0; b = 1]
+    A --> B[println 0; println 1]
+    B --> C[i = 3]
+    C --> D{i <= 30?}
+    D -->|No| End([End])
+    D -->|Yes| E[temp = a + b]
+    E --> F[println temp]
+    F --> G[a = b]
+    G --> H[b = temp]
+    H --> I[i = i + 1]
+    I --> D

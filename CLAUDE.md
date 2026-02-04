@@ -69,6 +69,13 @@ tests/
     ├── valid/       # Valid .mmd files for testing successful execution
     └── invalid/     # Invalid .mmd files for testing error handling
 
+benchmarks/                      # Benchmark suite comparing merx with other languages
+├── run.sh                       # Benchmark runner (requires: hyperfine, jq, merx, python3, node, ruby, go)
+├── README.md                    # Generated benchmark results (Markdown)
+└── programs/                    # Equivalent programs in each language
+    ├── fizzbuzz/                 # FizzBuzz implementations (.mmd, .py, .js, .rb, .go)
+    └── fibonacci/               # Fibonacci implementations (.mmd, .py, .js, .rb, .go)
+
 dockerfiles/                     # Dockerfiles for pre-built binary images
 web/                             # VitePress documentation site (separate from Rust codebase)
 ```
