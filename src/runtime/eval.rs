@@ -1,7 +1,9 @@
 //! Expression evaluation.
 //!
 //! This module handles the evaluation of expressions ([`Expr`]) to produce
-//! runtime values ([`Value`]).
+//! runtime values ([`Value`]). The main entry point, [`eval_expr`], returns
+//! `Cow<'_, Value>`, borrowing directly from the [`Environment`] for variable
+//! lookups (zero-copy) and producing owned values for all other expressions.
 //!
 //! # Overview
 //!
@@ -47,6 +49,7 @@
 //! The evaluator uses the [`InputReader`] trait for input operations,
 //! allowing dependency injection for testing.
 
+use std::borrow::Cow;
 use std::io::{self, BufRead};
 
 use crate::ast::{BinaryOp, Expr, TypeName, UnaryOp};
@@ -160,7 +163,9 @@ impl<R: BufRead> InputReader for StdinReader<R> {
 ///
 /// # Returns
 ///
-/// The evaluated [`Value`], or a [`RuntimeError`] if evaluation fails.
+/// The evaluated [`Value`] wrapped in a [`Cow`], or a [`RuntimeError`] if evaluation fails.
+/// Variable lookups return `Cow::Borrowed` (zero-copy), while all other
+/// expression types return `Cow::Owned`.
 ///
 /// # Errors
 ///
@@ -182,40 +187,41 @@ impl<R: BufRead> InputReader for StdinReader<R> {
 /// let mut input = StdinReader::new();
 /// let expr = Expr::Variable { name: "x".to_string() };
 ///
-/// // Note: This example won't actually compile in doc tests due to
-/// // stdin not being mockable, but illustrates the API
+/// // eval_expr returns Cow<Value>; use * to access the inner Value
+/// // let result: Cow<Value> = eval_expr(&expr, &env, &mut input)?;
+/// // let value: &Value = &*result;
 /// ```
-pub fn eval_expr<R: InputReader>(
+pub fn eval_expr<'a, R: InputReader>(
     expr: &Expr,
-    env: &Environment,
+    env: &'a Environment,
     input_reader: &mut R,
-) -> Result<Value, RuntimeError> {
+) -> Result<Cow<'a, Value>, RuntimeError> {
     match expr {
-        Expr::IntLit { value } => Ok(Value::Int(*value)),
-        Expr::StrLit { value } => Ok(Value::Str(value.clone())),
-        Expr::BoolLit { value } => Ok(Value::Bool(*value)),
+        Expr::IntLit { value } => Ok(Cow::Owned(Value::Int(*value))),
+        Expr::StrLit { value } => Ok(Cow::Owned(Value::Str(value.clone()))),
+        Expr::BoolLit { value } => Ok(Cow::Owned(Value::Bool(*value))),
 
-        Expr::Variable { name } => env.get(name).cloned(),
+        Expr::Variable { name } => env.get(name).map(Cow::Borrowed),
 
         Expr::Input => {
             let line = input_reader.read_line()?;
-            Ok(Value::Str(line))
+            Ok(Cow::Owned(Value::Str(line)))
         }
 
         Expr::Unary { op, operand } => {
             let val = eval_expr(operand, env, input_reader)?;
-            eval_unary(*op, val)
+            eval_unary(*op, &val).map(Cow::Owned)
         }
 
         Expr::Binary { op, left, right } => {
             let left_val = eval_expr(left, env, input_reader)?;
             let right_val = eval_expr(right, env, input_reader)?;
-            eval_binary(*op, left_val, right_val)
+            eval_binary(*op, &left_val, &right_val).map(Cow::Owned)
         }
 
         Expr::Cast { expr, target_type } => {
             let val = eval_expr(expr, env, input_reader)?;
-            eval_cast(val, *target_type)
+            eval_cast(&val, *target_type).map(Cow::Owned)
         }
     }
 }
@@ -232,7 +238,7 @@ pub fn eval_expr<R: InputReader>(
 /// # Arguments
 ///
 /// * `op` - The unary operator
-/// * `operand` - The operand value
+/// * `operand` - Reference to the operand value
 ///
 /// # Returns
 ///
@@ -241,7 +247,7 @@ pub fn eval_expr<R: InputReader>(
 /// # Errors
 ///
 /// Returns [`RuntimeError::TypeError`] if the operand has the wrong type.
-fn eval_unary(op: UnaryOp, operand: Value) -> Result<Value, RuntimeError> {
+fn eval_unary(op: UnaryOp, operand: &Value) -> Result<Value, RuntimeError> {
     match op {
         UnaryOp::Not => {
             let b = operand.as_bool().ok_or_else(|| RuntimeError::TypeError {
@@ -293,8 +299,8 @@ fn eval_unary(op: UnaryOp, operand: Value) -> Result<Value, RuntimeError> {
 /// # Arguments
 ///
 /// * `op` - The binary operator
-/// * `left` - The left operand value
-/// * `right` - The right operand value
+/// * `left` - Reference to the left operand value
+/// * `right` - Reference to the right operand value
 ///
 /// # Returns
 ///
@@ -304,10 +310,10 @@ fn eval_unary(op: UnaryOp, operand: Value) -> Result<Value, RuntimeError> {
 ///
 /// - [`RuntimeError::TypeError`] - Operand has wrong type for operator
 /// - [`RuntimeError::DivisionByZero`] - Division or modulo by zero
-fn eval_binary(op: BinaryOp, left: Value, right: Value) -> Result<Value, RuntimeError> {
+fn eval_binary(op: BinaryOp, left: &Value, right: &Value) -> Result<Value, RuntimeError> {
     match op {
         // Addition: int + int → int, str + str → str
-        BinaryOp::Add => match (&left, &right) {
+        BinaryOp::Add => match (left, right) {
             (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l.wrapping_add(*r))),
             (Value::Str(l), Value::Str(r)) => Ok(Value::Str(format!("{}{}", l, r))),
             (Value::Int(_), _) => Err(RuntimeError::TypeError {
@@ -424,7 +430,7 @@ fn eval_binary(op: BinaryOp, left: Value, right: Value) -> Result<Value, Runtime
 ///
 /// # Arguments
 ///
-/// * `val` - The value to cast
+/// * `val` - Reference to the value to cast
 /// * `target` - The target type
 ///
 /// # Returns
@@ -435,11 +441,11 @@ fn eval_binary(op: BinaryOp, left: Value, right: Value) -> Result<Value, Runtime
 ///
 /// Returns [`RuntimeError::CastError`] if the cast is not supported
 /// or if string-to-int parsing fails.
-fn eval_cast(val: Value, target: TypeName) -> Result<Value, RuntimeError> {
+fn eval_cast(val: &Value, target: TypeName) -> Result<Value, RuntimeError> {
     match target {
         TypeName::Int => match val {
-            Value::Int(n) => Ok(Value::Int(n)),
-            Value::Str(ref s) => {
+            Value::Int(n) => Ok(Value::Int(*n)),
+            Value::Str(s) => {
                 s.parse::<i64>()
                     .map(Value::Int)
                     .map_err(|_| RuntimeError::CastError {
@@ -469,7 +475,7 @@ mod tests {
         let mut input = MockInputReader::new(vec![]);
         let expr = Expr::IntLit { value: 42 };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Int(42));
+        assert_eq!(*result, Value::Int(42));
     }
 
     #[test]
@@ -480,7 +486,7 @@ mod tests {
             value: "hello".to_string(),
         };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Str("hello".to_string()));
+        assert_eq!(*result, Value::Str("hello".to_string()));
     }
 
     #[test]
@@ -489,7 +495,7 @@ mod tests {
         let mut input = MockInputReader::new(vec![]);
         let expr = Expr::BoolLit { value: true };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Bool(true));
+        assert_eq!(*result, Value::Bool(true));
     }
 
     #[test]
@@ -501,7 +507,7 @@ mod tests {
             name: "x".to_string(),
         };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Int(10));
+        assert_eq!(*result, Value::Int(10));
     }
 
     #[test]
@@ -524,7 +530,7 @@ mod tests {
         let mut input = MockInputReader::new(vec!["hello"]);
         let expr = Expr::Input;
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Str("hello".to_string()));
+        assert_eq!(*result, Value::Str("hello".to_string()));
     }
 
     #[test]
@@ -536,7 +542,7 @@ mod tests {
             operand: Box::new(Expr::BoolLit { value: true }),
         };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Bool(false));
+        assert_eq!(*result, Value::Bool(false));
     }
 
     #[test]
@@ -548,7 +554,7 @@ mod tests {
             operand: Box::new(Expr::IntLit { value: 42 }),
         };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Int(-42));
+        assert_eq!(*result, Value::Int(-42));
     }
 
     #[test]
@@ -561,7 +567,7 @@ mod tests {
             right: Box::new(Expr::IntLit { value: 2 }),
         };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Int(3));
+        assert_eq!(*result, Value::Int(3));
     }
 
     #[test]
@@ -574,7 +580,7 @@ mod tests {
             right: Box::new(Expr::IntLit { value: 3 }),
         };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Int(2));
+        assert_eq!(*result, Value::Int(2));
     }
 
     #[test]
@@ -587,7 +593,7 @@ mod tests {
             right: Box::new(Expr::IntLit { value: 4 }),
         };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Int(12));
+        assert_eq!(*result, Value::Int(12));
     }
 
     #[test]
@@ -600,7 +606,7 @@ mod tests {
             right: Box::new(Expr::IntLit { value: 3 }),
         };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Int(3));
+        assert_eq!(*result, Value::Int(3));
     }
 
     #[test]
@@ -613,7 +619,7 @@ mod tests {
             right: Box::new(Expr::IntLit { value: 3 }),
         };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Int(1));
+        assert_eq!(*result, Value::Int(1));
     }
 
     #[test]
@@ -653,7 +659,7 @@ mod tests {
             right: Box::new(Expr::IntLit { value: 2 }),
         };
         assert_eq!(
-            eval_expr(&expr_lt, &env, &mut input).unwrap(),
+            *eval_expr(&expr_lt, &env, &mut input).unwrap(),
             Value::Bool(true)
         );
 
@@ -663,7 +669,7 @@ mod tests {
             right: Box::new(Expr::IntLit { value: 2 }),
         };
         assert_eq!(
-            eval_expr(&expr_le, &env, &mut input).unwrap(),
+            *eval_expr(&expr_le, &env, &mut input).unwrap(),
             Value::Bool(true)
         );
 
@@ -673,7 +679,7 @@ mod tests {
             right: Box::new(Expr::IntLit { value: 2 }),
         };
         assert_eq!(
-            eval_expr(&expr_gt, &env, &mut input).unwrap(),
+            *eval_expr(&expr_gt, &env, &mut input).unwrap(),
             Value::Bool(true)
         );
 
@@ -683,7 +689,7 @@ mod tests {
             right: Box::new(Expr::IntLit { value: 2 }),
         };
         assert_eq!(
-            eval_expr(&expr_ge, &env, &mut input).unwrap(),
+            *eval_expr(&expr_ge, &env, &mut input).unwrap(),
             Value::Bool(true)
         );
     }
@@ -699,7 +705,7 @@ mod tests {
             right: Box::new(Expr::IntLit { value: 1 }),
         };
         assert_eq!(
-            eval_expr(&expr_eq, &env, &mut input).unwrap(),
+            *eval_expr(&expr_eq, &env, &mut input).unwrap(),
             Value::Bool(true)
         );
 
@@ -709,7 +715,7 @@ mod tests {
             right: Box::new(Expr::IntLit { value: 2 }),
         };
         assert_eq!(
-            eval_expr(&expr_ne, &env, &mut input).unwrap(),
+            *eval_expr(&expr_ne, &env, &mut input).unwrap(),
             Value::Bool(true)
         );
 
@@ -722,7 +728,7 @@ mod tests {
             }),
         };
         assert_eq!(
-            eval_expr(&expr_eq_diff_type, &env, &mut input).unwrap(),
+            *eval_expr(&expr_eq_diff_type, &env, &mut input).unwrap(),
             Value::Bool(false)
         );
     }
@@ -738,7 +744,7 @@ mod tests {
             right: Box::new(Expr::BoolLit { value: false }),
         };
         assert_eq!(
-            eval_expr(&expr_and, &env, &mut input).unwrap(),
+            *eval_expr(&expr_and, &env, &mut input).unwrap(),
             Value::Bool(false)
         );
 
@@ -748,7 +754,7 @@ mod tests {
             right: Box::new(Expr::BoolLit { value: false }),
         };
         assert_eq!(
-            eval_expr(&expr_or, &env, &mut input).unwrap(),
+            *eval_expr(&expr_or, &env, &mut input).unwrap(),
             Value::Bool(true)
         );
     }
@@ -764,7 +770,7 @@ mod tests {
             target_type: TypeName::Int,
         };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Int(123));
+        assert_eq!(*result, Value::Int(123));
     }
 
     #[test]
@@ -790,7 +796,7 @@ mod tests {
             target_type: TypeName::Str,
         };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Str("42".to_string()));
+        assert_eq!(*result, Value::Str("42".to_string()));
     }
 
     #[test]
@@ -802,7 +808,7 @@ mod tests {
             target_type: TypeName::Str,
         };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Str("true".to_string()));
+        assert_eq!(*result, Value::Str("true".to_string()));
     }
 
     #[test]
@@ -819,7 +825,7 @@ mod tests {
             }),
         };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Str("foobar".to_string()));
+        assert_eq!(*result, Value::Str("foobar".to_string()));
     }
 
     #[test]
@@ -914,7 +920,9 @@ mod tests {
 
         let env = Environment::new();
         let mut mock_input = MockInputReader::new(vec![]);
-        eval_expr(&expr, &env, &mut mock_input).expect("Evaluation failed")
+        eval_expr(&expr, &env, &mut mock_input)
+            .expect("Evaluation failed")
+            .into_owned()
     }
 
     /// Helper function to parse a condition expression and evaluate it.
@@ -940,7 +948,9 @@ mod tests {
 
         let env = Environment::new();
         let mut mock_input = MockInputReader::new(vec![]);
-        eval_expr(&expr, &env, &mut mock_input).expect("Evaluation failed")
+        eval_expr(&expr, &env, &mut mock_input)
+            .expect("Evaluation failed")
+            .into_owned()
     }
 
     #[test]
@@ -984,8 +994,8 @@ mod tests {
         let mut input = MockInputReader::new(vec![]);
         let expr = Expr::IntLit { value: i64::MAX };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Int(i64::MAX));
-        assert_eq!(result, Value::Int(9223372036854775807));
+        assert_eq!(*result, Value::Int(i64::MAX));
+        assert_eq!(*result, Value::Int(9223372036854775807));
     }
 
     #[test]
@@ -994,8 +1004,8 @@ mod tests {
         let mut input = MockInputReader::new(vec![]);
         let expr = Expr::IntLit { value: i64::MIN };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Int(i64::MIN));
-        assert_eq!(result, Value::Int(-9223372036854775808));
+        assert_eq!(*result, Value::Int(i64::MIN));
+        assert_eq!(*result, Value::Int(-9223372036854775808));
     }
 
     #[test]
@@ -1009,7 +1019,7 @@ mod tests {
             right: Box::new(Expr::IntLit { value: 1 }),
         };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Int(i64::MIN));
+        assert_eq!(*result, Value::Int(i64::MIN));
     }
 
     #[test]
@@ -1025,8 +1035,8 @@ mod tests {
             right: Box::new(Expr::IntLit { value: 2 }),
         };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Int(i64::MAX.wrapping_mul(2)));
-        assert_eq!(result, Value::Int(-2));
+        assert_eq!(*result, Value::Int(i64::MAX.wrapping_mul(2)));
+        assert_eq!(*result, Value::Int(-2));
     }
 
     #[test]
@@ -1040,7 +1050,7 @@ mod tests {
             right: Box::new(Expr::IntLit { value: 3 }),
         };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Int(-1));
+        assert_eq!(*result, Value::Int(-1));
     }
 
     #[test]
@@ -1055,7 +1065,7 @@ mod tests {
             target_type: TypeName::Int,
         };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Int(i64::MAX));
+        assert_eq!(*result, Value::Int(i64::MAX));
     }
 
     #[test]
@@ -1092,7 +1102,7 @@ mod tests {
             target_type: TypeName::Int,
         };
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Int(-42));
+        assert_eq!(*result, Value::Int(-42));
     }
 
     #[test]
@@ -1146,7 +1156,7 @@ mod tests {
 
         let result = eval_expr(&expr, &env, &mut input).unwrap();
         // At EOF, read_line returns Ok("") (empty string after trimming)
-        assert_eq!(result, Value::Str("".to_string()));
+        assert_eq!(*result, Value::Str("".to_string()));
     }
 
     #[test]
@@ -1160,7 +1170,7 @@ mod tests {
         let expr = Expr::Input;
 
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Str("".to_string()));
+        assert_eq!(*result, Value::Str("".to_string()));
     }
 
     #[test]
@@ -1174,7 +1184,7 @@ mod tests {
         let expr = Expr::Input;
 
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Str("".to_string()));
+        assert_eq!(*result, Value::Str("".to_string()));
     }
 
     #[test]
@@ -1189,7 +1199,7 @@ mod tests {
 
         let result = eval_expr(&expr, &env, &mut input).unwrap();
         // Only trailing \r and \n are trimmed, spaces are preserved
-        assert_eq!(result, Value::Str("   ".to_string()));
+        assert_eq!(*result, Value::Str("   ".to_string()));
     }
 
     #[test]
@@ -1204,7 +1214,7 @@ mod tests {
 
         let result = eval_expr(&expr, &env, &mut input).unwrap();
         // Only trailing \r and \n are trimmed, tabs are preserved
-        assert_eq!(result, Value::Str("\t\t".to_string()));
+        assert_eq!(*result, Value::Str("\t\t".to_string()));
     }
 
     #[test]
@@ -1218,7 +1228,7 @@ mod tests {
         let expr = Expr::Input;
 
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Str(" \t \t ".to_string()));
+        assert_eq!(*result, Value::Str(" \t \t ".to_string()));
     }
 
     #[test]
@@ -1233,17 +1243,17 @@ mod tests {
         let expr = Expr::Input;
 
         let result1 = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result1, Value::Str("first".to_string()));
+        assert_eq!(*result1, Value::Str("first".to_string()));
 
         let result2 = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result2, Value::Str("second".to_string()));
+        assert_eq!(*result2, Value::Str("second".to_string()));
 
         let result3 = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result3, Value::Str("third".to_string()));
+        assert_eq!(*result3, Value::Str("third".to_string()));
 
         // Fourth read should return empty string (EOF)
         let result4 = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result4, Value::Str("".to_string()));
+        assert_eq!(*result4, Value::Str("".to_string()));
     }
 
     #[test]
@@ -1257,6 +1267,6 @@ mod tests {
         let expr = Expr::Input;
 
         let result = eval_expr(&expr, &env, &mut input).unwrap();
-        assert_eq!(result, Value::Str("no newline at end".to_string()));
+        assert_eq!(*result, Value::Str("no newline at end".to_string()));
     }
 }

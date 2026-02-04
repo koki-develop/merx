@@ -172,7 +172,7 @@ pub fn exec_statement<R: InputReader, W: OutputWriter>(
 ) -> Result<(), RuntimeError> {
     match stmt {
         Statement::Assign { variable, value } => {
-            let val = eval_expr(value, env, input_reader)?;
+            let val = eval_expr(value, env, input_reader)?.into_owned();
             env.set(variable, val);
             Ok(())
         }
