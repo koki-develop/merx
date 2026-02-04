@@ -276,15 +276,13 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
     /// ```
     pub fn run(&mut self) -> Result<u8, RuntimeError> {
         loop {
-            let node = self
-                .nodes
-                .get(&self.current_node_id)
-                .ok_or_else(|| RuntimeError::NodeNotFound {
+            let node = self.nodes.get(&self.current_node_id).ok_or_else(|| {
+                RuntimeError::NodeNotFound {
                     node_id: self.current_node_id.clone(),
-                })?
-                .clone();
+                }
+            })?;
 
-            match &node {
+            match node {
                 Node::Start { .. } => {
                     // Move to the next node from Start
                     self.move_to_next()?;
