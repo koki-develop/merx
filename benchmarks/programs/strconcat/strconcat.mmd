@@ -1,0 +1,7 @@
+flowchart TD
+    Start([Start]) --> Init[n = 10000; s = ''; i = 0]
+    Init --> Cond{i < n?}
+    Cond -->|Yes| Concat[s = s + 'a'; i = i + 1]
+    Concat --> Cond
+    Cond -->|No| Print[println i]
+    Print --> End([End])

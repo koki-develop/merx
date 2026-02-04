@@ -88,12 +88,14 @@ go build -o "$BUILD_DIR/fibonacci_go" "$PROGRAMS_DIR/fibonacci/fibonacci.go"
 go build -o "$BUILD_DIR/gcdsum_go" "$PROGRAMS_DIR/gcdsum/gcdsum.go"
 go build -o "$BUILD_DIR/primecount_go" "$PROGRAMS_DIR/primecount/primecount.go"
 go build -o "$BUILD_DIR/collatz_go" "$PROGRAMS_DIR/collatz/collatz.go"
+go build -o "$BUILD_DIR/strconcat_go" "$PROGRAMS_DIR/strconcat/strconcat.go"
 echo "Compiling Rust programs..."
 rustc -O -o "$BUILD_DIR/fizzbuzz_rust" "$PROGRAMS_DIR/fizzbuzz/fizzbuzz.rs"
 rustc -O -o "$BUILD_DIR/fibonacci_rust" "$PROGRAMS_DIR/fibonacci/fibonacci.rs"
 rustc -O -o "$BUILD_DIR/gcdsum_rust" "$PROGRAMS_DIR/gcdsum/gcdsum.rs"
 rustc -O -o "$BUILD_DIR/primecount_rust" "$PROGRAMS_DIR/primecount/primecount.rs"
 rustc -O -o "$BUILD_DIR/collatz_rust" "$PROGRAMS_DIR/collatz/collatz.rs"
+rustc -O -o "$BUILD_DIR/strconcat_rust" "$PROGRAMS_DIR/strconcat/strconcat.rs"
 
 cleanup() {
   rm -rf "$BUILD_DIR"
@@ -162,6 +164,11 @@ echo ""
 echo "=== Running Collatz Conjecture benchmark (n=10000) ==="
 mapfile -t collatz_args < <(build_hyperfine_args "collatz")
 hyperfine "${collatz_args[@]}"
+
+echo ""
+echo "=== Running String Concatenation benchmark (n=10000) ==="
+mapfile -t strconcat_args < <(build_hyperfine_args "strconcat")
+hyperfine "${strconcat_args[@]}"
 
 # --- Generate Markdown report ---
 echo ""
@@ -261,6 +268,13 @@ TEMP_OUTPUT="$(mktemp)"
   echo "Programs: [./programs/collatz/](./programs/collatz/)"
   echo ""
   generate_table "$RESULTS_DIR/collatz.json" "$VERSIONS_JSON"
+  echo ""
+
+  echo "## String Concatenation (n=10000)"
+  echo ""
+  echo "Programs: [./programs/strconcat/](./programs/strconcat/)"
+  echo ""
+  generate_table "$RESULTS_DIR/strconcat.json" "$VERSIONS_JSON"
   echo ""
 } >"$TEMP_OUTPUT"
 
