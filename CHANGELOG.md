@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3](https://github.com/koki-develop/merx/compare/v0.1.2...v0.1.3) (2026-02-04)
+
+
+### Bug Fixes
+
+* Remove unnecessary Node clone in interpreter loop ([ab80829](https://github.com/koki-develop/merx/commit/ab80829bd30c35cf0d6e5e2d021f14d143974a60))
+* Replace HashMap with Vec+usize index for node/edge lookup ([2a5f56f](https://github.com/koki-develop/merx/commit/2a5f56f51ad2689567c50d0f7914bb933845a96f))
+
 ## [0.1.2](https://github.com/koki-develop/merx/compare/v0.1.1...v0.1.2) (2026-02-04)
 
 
