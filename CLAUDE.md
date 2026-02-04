@@ -132,6 +132,8 @@ After release assets are uploaded, the `homebrew-tap` job automatically generate
 - Multi-arch support: amd64 (`x86_64-unknown-linux-gnu`) and arm64 (`aarch64-unknown-linux-gnu`)
 - Binary is downloaded from GitHub Releases and verified against SHA256 checksum
 - Build: `docker build -f dockerfiles/bookworm-slim.Dockerfile --build-arg VERSION=<version> .`
+- Published to `ghcr.io/koki-develop/merx` on release via the `docker` job in the release workflow
+- Image tags: `<version>` (e.g., `0.1.1`), `<major>.<minor>` (e.g., `0.1`), `<major>` (e.g., `0`), `latest`
 
 ## GitHub Actions Conventions
 
