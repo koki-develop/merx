@@ -1,0 +1,75 @@
+name: Benchmarks
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  benchmarks:
+    name: Benchmarks
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # for committing benchmark results via GitHub API
+    steps:
+      # ============================================================
+      # Setup
+      # ============================================================
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # v3.6.1
+        with:
+          working_directory: benchmarks
+
+      - name: Install merx
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release download --pattern 'merx-*-x86_64-unknown-linux-gnu.tar.gz' --output merx.tar.gz
+          tar xzf merx.tar.gz merx
+          sudo mv merx /usr/local/bin/merx
+          rm merx.tar.gz
+          merx --version
+
+      # ============================================================
+      # Run benchmarks
+      # ============================================================
+
+      - name: Run benchmarks
+        working-directory: benchmarks
+        run: bash run.sh --warmup 5 --runs 100
+
+      # ============================================================
+      # Commit results
+      # ============================================================
+
+      - name: Update benchmark results
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          if git diff --quiet benchmarks/README.md; then
+            echo "No changes to benchmarks/README.md, skipping commit."
+            exit 0
+          fi
+
+          SHA=$(gh api "repos/${GH_REPO}/contents/benchmarks/README.md" --jq '.sha' -f ref="$BRANCH")
+          gh api --method PUT "repos/${GH_REPO}/contents/benchmarks/README.md" \
+            --field message="docs: update benchmark results" \
+            --field content=@<(base64 -i benchmarks/README.md) \
+            --field sha="$SHA" \
+            --field branch="$BRANCH"
