@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/koki-develop/merx/compare/v0.1.1...v0.1.2) (2026-02-04)
+
+
+### Features
+
+* Release v0.1.2 ([04b31dc](https://github.com/koki-develop/merx/commit/04b31dcd4b727b4485c26c7b28b942a63b5b402c))
+
 ## [0.1.1](https://github.com/koki-develop/merx/compare/v0.1.0...v0.1.1) (2026-02-03)
 
 
