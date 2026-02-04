@@ -56,12 +56,21 @@
 use std::collections::HashMap;
 use std::io;
 
-use crate::ast::{Edge, EdgeLabel, Flowchart, Node};
+use crate::ast::{EdgeLabel, Flowchart, Node};
 
 use super::env::Environment;
 use super::error::RuntimeError;
 use super::eval::{InputReader, StdinReader, eval_expr};
 use super::exec::{OutputWriter, StdioWriter, exec_statement};
+
+/// An internal edge representation using node indices instead of string IDs.
+///
+/// This avoids string hashing and cloning during node traversal.
+struct InternalEdge {
+    to: usize,
+    label: Option<EdgeLabel>,
+    exit_code: Option<u8>,
+}
 
 /// The main execution engine for Mermaid flowchart programs.
 ///
@@ -100,21 +109,21 @@ use super::exec::{OutputWriter, StdioWriter, exec_statement};
 /// interpreter.run().unwrap();
 /// ```
 pub struct Interpreter<R: InputReader, W: OutputWriter> {
-    /// Lookup table mapping node IDs to their definitions.
+    /// Node list indexed by position.
     ///
     /// Built during construction from the flowchart's node list.
-    nodes: HashMap<String, Node>,
+    nodes: Vec<Node>,
 
-    /// Lookup table mapping node IDs to their outgoing edges.
+    /// Outgoing edges for each node, indexed by the same position as `nodes`.
     ///
     /// Process nodes typically have one edge; condition nodes have two
     /// (labeled Yes and No).
-    outgoing_edges: HashMap<String, Vec<Edge>>,
+    outgoing_edges: Vec<Vec<InternalEdge>>,
 
-    /// The ID of the node currently being executed.
+    /// The index of the node currently being executed.
     ///
-    /// Starts at "Start" and updated as edges are followed.
-    current_node_id: String,
+    /// Starts at the Start node's index and updated as edges are followed.
+    current_node: usize,
 
     /// The variable environment storing all variable bindings.
     env: Environment,
@@ -189,45 +198,59 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
     /// # Implementation Details
     ///
     /// Construction performs these steps:
-    /// 1. Build node lookup table from flowchart nodes
+    /// 1. Build name-to-index mapping from flowchart nodes
     /// 2. Validate Start and End nodes exist (defensive; normally caught at parse time)
-    /// 3. Build edge lookup table from flowchart edges
+    /// 3. Convert edges to index-based `InternalEdge` representations
     /// 4. Initialize empty environment
     pub fn with_io(
         flowchart: Flowchart,
         input_reader: R,
         output_writer: W,
     ) -> Result<Self, RuntimeError> {
-        // Build the node map
-        let mut nodes: HashMap<String, Node> = HashMap::new();
-        for node in flowchart.nodes {
-            let id = node.id().to_string();
-            nodes.insert(id, node);
+        // Build name-to-index mapping
+        let mut name_to_index: HashMap<String, usize> = HashMap::new();
+        let mut start_index = None;
+        let mut has_end = false;
+
+        for (i, node) in flowchart.nodes.iter().enumerate() {
+            name_to_index.insert(node.id().to_string(), i);
+            match node {
+                Node::Start { .. } => start_index = Some(i),
+                Node::End { .. } => has_end = true,
+                _ => {}
+            }
         }
 
         // Defensive validation for Start/End nodes.
         // Normally caught at parse time, but checked here as well for
         // manually constructed Flowchart structs that bypass the parser.
-        if !nodes.values().any(|n| matches!(n, Node::Start { .. })) {
-            return Err(RuntimeError::MissingStartNode);
-        }
-        if !nodes.values().any(|n| matches!(n, Node::End { .. })) {
+        let start_index = start_index.ok_or(RuntimeError::MissingStartNode)?;
+        if !has_end {
             return Err(RuntimeError::MissingEndNode);
         }
 
-        // Build the outgoing edge map
-        let mut outgoing_edges: HashMap<String, Vec<Edge>> = HashMap::new();
-        for edge in flowchart.edges {
-            outgoing_edges
-                .entry(edge.from.clone())
-                .or_default()
-                .push(edge);
+        // Build index-based outgoing edges
+        let mut outgoing_edges: Vec<Vec<InternalEdge>> =
+            (0..flowchart.nodes.len()).map(|_| Vec::new()).collect();
+        for edge in &flowchart.edges {
+            let from_idx = name_to_index[&edge.from];
+            let to_idx =
+                *name_to_index
+                    .get(&edge.to)
+                    .ok_or_else(|| RuntimeError::NodeNotFound {
+                        node_id: edge.to.clone(),
+                    })?;
+            outgoing_edges[from_idx].push(InternalEdge {
+                to: to_idx,
+                label: edge.label.clone(),
+                exit_code: edge.exit_code,
+            });
         }
 
         Ok(Self {
-            nodes,
+            nodes: flowchart.nodes,
             outgoing_edges,
-            current_node_id: "Start".to_string(),
+            current_node: start_index,
             env: Environment::new(),
             input_reader,
             output_writer,
@@ -276,11 +299,7 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
     /// ```
     pub fn run(&mut self) -> Result<u8, RuntimeError> {
         loop {
-            let node = self.nodes.get(&self.current_node_id).ok_or_else(|| {
-                RuntimeError::NodeNotFound {
-                    node_id: self.current_node_id.clone(),
-                }
-            })?;
+            let node = &self.nodes[self.current_node];
 
             match node {
                 Node::Start { .. } => {
@@ -327,16 +346,17 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
     /// Returns [`RuntimeError::NoOutgoingEdge`] if the current node
     /// has no outgoing edges.
     fn move_to_next(&mut self) -> Result<(), RuntimeError> {
-        let edges = self
-            .outgoing_edges
-            .get(&self.current_node_id)
-            .ok_or_else(|| RuntimeError::NoOutgoingEdge {
-                node_id: self.current_node_id.clone(),
-            })?;
+        let edges = &self.outgoing_edges[self.current_node];
+
+        if edges.is_empty() {
+            return Err(RuntimeError::NoOutgoingEdge {
+                node_id: self.nodes[self.current_node].id().to_string(),
+            });
+        }
 
         // Use the first edge from normal nodes
         self.last_exit_code = edges[0].exit_code;
-        self.current_node_id = edges[0].to.clone();
+        self.current_node = edges[0].to;
         Ok(())
     }
 
@@ -356,12 +376,13 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
     /// Returns [`RuntimeError::NoMatchingConditionEdge`] if no edge with
     /// the required label exists.
     fn move_to_condition_branch(&mut self, condition_result: bool) -> Result<(), RuntimeError> {
-        let edges = self
-            .outgoing_edges
-            .get(&self.current_node_id)
-            .ok_or_else(|| RuntimeError::NoOutgoingEdge {
-                node_id: self.current_node_id.clone(),
-            })?;
+        let edges = &self.outgoing_edges[self.current_node];
+
+        if edges.is_empty() {
+            return Err(RuntimeError::NoOutgoingEdge {
+                node_id: self.nodes[self.current_node].id().to_string(),
+            });
+        }
 
         let target_label = if condition_result {
             EdgeLabel::Yes
@@ -377,13 +398,13 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
                 )
             {
                 self.last_exit_code = edge.exit_code;
-                self.current_node_id = edge.to.clone();
+                self.current_node = edge.to;
                 return Ok(());
             }
         }
 
         Err(RuntimeError::NoMatchingConditionEdge {
-            node_id: self.current_node_id.clone(),
+            node_id: self.nodes[self.current_node].id().to_string(),
             condition_result,
         })
     }
@@ -405,7 +426,7 @@ impl<R: InputReader, W: OutputWriter> Interpreter<R, W> {
 mod tests {
     use super::super::test_helpers::{FailingOutputWriter, MockInputReader, MockOutputWriter};
     use super::*;
-    use crate::ast::{Direction, Expr, Statement};
+    use crate::ast::{Direction, Edge, Expr, Statement};
 
     fn create_simple_flowchart() -> Flowchart {
         // Start --> A[print 'hello'] --> End
@@ -869,8 +890,8 @@ mod tests {
         let input = MockInputReader::new(vec![]);
         let output = MockOutputWriter::new();
 
-        let mut interpreter = Interpreter::with_io(flowchart, input, output).unwrap();
-        let result = interpreter.run();
+        // NodeNotFound is now detected at construction time (fail-fast)
+        let result = Interpreter::with_io(flowchart, input, output);
 
         assert!(matches!(
             result,
