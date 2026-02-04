@@ -74,7 +74,7 @@ declare -A LANG_VERSIONS=()
 LANG_VERSIONS[merx]="$(merx --version)"
 LANG_VERSIONS[python]="$(python3 --version)"
 LANG_VERSIONS[node]="Node.js $(node --version)"
-LANG_VERSIONS[ruby]="$(ruby --version | awk '{print $1, $2}')"
+LANG_VERSIONS[ruby]="Ruby $(ruby --version | awk '{print $2}')"
 LANG_VERSIONS[go]="$(go version | awk '{print $3}' | sed 's/^go/Go /')"
 LANG_VERSIONS[rust]="$(rustc --version | awk '{print "Rust", $2}')"
 
@@ -85,9 +85,11 @@ BUILD_DIR=$(mktemp -d)
 echo "Compiling Go programs..."
 go build -o "$BUILD_DIR/fizzbuzz_go" "$PROGRAMS_DIR/fizzbuzz/fizzbuzz.go"
 go build -o "$BUILD_DIR/fibonacci_go" "$PROGRAMS_DIR/fibonacci/fibonacci.go"
+go build -o "$BUILD_DIR/gcdsum_go" "$PROGRAMS_DIR/gcdsum/gcdsum.go"
 echo "Compiling Rust programs..."
 rustc -O -o "$BUILD_DIR/fizzbuzz_rust" "$PROGRAMS_DIR/fizzbuzz/fizzbuzz.rs"
 rustc -O -o "$BUILD_DIR/fibonacci_rust" "$PROGRAMS_DIR/fibonacci/fibonacci.rs"
+rustc -O -o "$BUILD_DIR/gcdsum_rust" "$PROGRAMS_DIR/gcdsum/gcdsum.rs"
 
 cleanup() {
   rm -rf "$BUILD_DIR"
@@ -141,6 +143,11 @@ echo ""
 echo "=== Running Fibonacci benchmark (n=30) ==="
 mapfile -t fibonacci_args < <(build_hyperfine_args "fibonacci")
 hyperfine "${fibonacci_args[@]}"
+
+echo ""
+echo "=== Running GCD Sum benchmark (n=100) ==="
+mapfile -t gcdsum_args < <(build_hyperfine_args "gcdsum")
+hyperfine "${gcdsum_args[@]}"
 
 # --- Generate Markdown report ---
 echo ""
@@ -219,6 +226,13 @@ TEMP_OUTPUT="$(mktemp)"
   echo "Programs: [./programs/fibonacci/](./programs/fibonacci/)"
   echo ""
   generate_table "$RESULTS_DIR/fibonacci.json" "$VERSIONS_JSON"
+  echo ""
+
+  echo "## GCD Sum (n=100)"
+  echo ""
+  echo "Programs: [./programs/gcdsum/](./programs/gcdsum/)"
+  echo ""
+  generate_table "$RESULTS_DIR/gcdsum.json" "$VERSIONS_JSON"
   echo ""
 } >"$TEMP_OUTPUT"
 

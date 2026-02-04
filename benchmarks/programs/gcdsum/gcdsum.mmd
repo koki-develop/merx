@@ -1,0 +1,16 @@
+flowchart TD
+    Start([Start]) --> Init[n = 100; s = 0; i = 1]
+    Init --> OuterCond{i <= n?}
+    OuterCond -->|No| Print[println s]
+    Print --> End([End])
+    OuterCond -->|Yes| InnerInit[j = 1]
+    InnerInit --> InnerCond{j <= n?}
+    InnerCond -->|No| IncI[i = i + 1]
+    IncI --> OuterCond
+    InnerCond -->|Yes| GCDInit[a = i; b = j]
+    GCDInit --> GCDCond{b != 0?}
+    GCDCond -->|No| AddGCD[s = s + a]
+    AddGCD --> IncJ[j = j + 1]
+    IncJ --> InnerCond
+    GCDCond -->|Yes| GCDStep[temp = b; b = a % b; a = temp]
+    GCDStep --> GCDCond
