@@ -68,7 +68,7 @@ jobs:
             exit 0
           fi
 
-          SHA=$(gh api "repos/${GH_REPO}/contents/benchmarks/README.md" --jq '.sha' -f ref="$BRANCH")
+          SHA=$(gh api "repos/${GH_REPO}/contents/benchmarks/README.md" --jq '.sha')
           gh api --method PUT "repos/${GH_REPO}/contents/benchmarks/README.md" \
             --field message="docs: update benchmark results" \
             --field content=@<(base64 -i benchmarks/README.md) \
