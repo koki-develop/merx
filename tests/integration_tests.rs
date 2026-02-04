@@ -588,6 +588,85 @@ mod invalid_flowcharts {
         );
         assert!(matches!(result.unwrap_err(), AnalysisError::Syntax(_)));
     }
+
+    // --- Tests added from TESTS.md section 1 ---
+
+    #[test]
+    fn test_multiple_no_edges() {
+        let source = include_str!("fixtures/invalid/multiple_no_edges.mmd");
+        let result = parser::parse(source);
+        assert!(result.is_err(), "Should fail with multiple No edges");
+        let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
+        assert!(
+            err.to_string().contains("multiple 'No' edges"),
+            "Error should mention multiple No edges: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_condition_custom_label() {
+        let source = include_str!("fixtures/invalid/condition_custom_label.mmd");
+        let result = parser::parse(source);
+        assert!(
+            result.is_err(),
+            "Should fail with custom label on condition"
+        );
+        let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
+        assert!(
+            err.to_string()
+                .contains("must have 'Yes' or 'No' label, but got"),
+            "Error should mention invalid label: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_condition_no_label_edge() {
+        let source = include_str!("fixtures/invalid/condition_no_label.mmd");
+        let result = parser::parse(source);
+        assert!(
+            result.is_err(),
+            "Should fail with unlabeled edge from condition"
+        );
+        let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
+        assert!(
+            err.to_string().contains("must have 'Yes' or 'No' label"),
+            "Error should mention missing label: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_multiple_outgoing_edges() {
+        let source = include_str!("fixtures/invalid/multiple_outgoing_edges.mmd");
+        let result = parser::parse(source);
+        assert!(
+            result.is_err(),
+            "Should fail with multiple outgoing edges on non-condition"
+        );
+        let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
+        assert!(
+            err.to_string().contains("has multiple outgoing edges"),
+            "Error should mention multiple outgoing edges: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_negative_exit_code() {
+        // "-" is not allowed in label_text, so this is a syntax error
+        let source = r#"flowchart TD
+    Start -->|exit -1| End
+"#;
+        let result = parser::parse(source);
+        assert!(result.is_err(), "Should fail with negative exit code");
+        assert!(matches!(result.unwrap_err(), AnalysisError::Syntax(_)));
+    }
 }
 
 // =============================================================================
@@ -685,6 +764,142 @@ mod runtime_errors {
         let result = run_flowchart(source);
         assert!(result.is_err(), "Should fail with invalid cast");
     }
+
+    // --- Tests added from TESTS.md section 2 ---
+
+    #[test]
+    fn test_type_error_bool_addition() {
+        let source = r#"flowchart TD
+    Start --> A[x = true + 1]
+    A --> End
+"#;
+        let result = run_flowchart(source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("Type error"), "Error: {}", err);
+        assert!(err.contains("int or str"), "Error: {}", err);
+    }
+
+    #[test]
+    fn test_type_error_str_subtraction() {
+        let source = r#"flowchart TD
+    Start --> A[x = 'a' - 'b']
+    A --> End
+"#;
+        let result = run_flowchart(source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("Type error"), "Error: {}", err);
+        assert!(err.contains("expected int"), "Error: {}", err);
+    }
+
+    #[test]
+    fn test_type_error_str_multiplication() {
+        let source = r#"flowchart TD
+    Start --> A[x = 'a' * 2]
+    A --> End
+"#;
+        let result = run_flowchart(source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("Type error"), "Error: {}", err);
+        assert!(err.contains("expected int"), "Error: {}", err);
+    }
+
+    #[test]
+    fn test_type_error_str_division() {
+        let source = r#"flowchart TD
+    Start --> A[x = 'a' / 2]
+    A --> End
+"#;
+        let result = run_flowchart(source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("Type error"), "Error: {}", err);
+        assert!(err.contains("expected int"), "Error: {}", err);
+    }
+
+    #[test]
+    fn test_type_error_str_modulo() {
+        let source = r#"flowchart TD
+    Start --> A[x = 'a' % 2]
+    A --> End
+"#;
+        let result = run_flowchart(source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("Type error"), "Error: {}", err);
+        assert!(err.contains("expected int"), "Error: {}", err);
+    }
+
+    #[test]
+    fn test_type_error_str_comparison() {
+        let source = r#"flowchart TD
+    Start --> A{'a' < 'b'?}
+    A -->|Yes| End
+    A -->|No| End
+"#;
+        let result = run_flowchart(source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("Type error"), "Error: {}", err);
+        assert!(err.contains("expected int"), "Error: {}", err);
+    }
+
+    #[test]
+    fn test_type_error_non_bool_logical_and() {
+        let source = r#"flowchart TD
+    Start --> A{1 && 2?}
+    A -->|Yes| End
+    A -->|No| End
+"#;
+        let result = run_flowchart(source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("Type error"), "Error: {}", err);
+        assert!(err.contains("expected bool"), "Error: {}", err);
+    }
+
+    #[test]
+    fn test_type_error_non_bool_logical_or() {
+        let source = r#"flowchart TD
+    Start --> A{1 || 2?}
+    A -->|Yes| End
+    A -->|No| End
+"#;
+        let result = run_flowchart(source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("Type error"), "Error: {}", err);
+        assert!(err.contains("expected bool"), "Error: {}", err);
+    }
+
+    #[test]
+    fn test_type_error_non_bool_not() {
+        let source = r#"flowchart TD
+    Start --> A{!42?}
+    A -->|Yes| End
+    A -->|No| End
+"#;
+        let result = run_flowchart(source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("Type error"), "Error: {}", err);
+        assert!(err.contains("expected bool"), "Error: {}", err);
+    }
+
+    #[test]
+    fn test_type_error_non_int_negation() {
+        let source = r#"flowchart TD
+    Start --> A[x = -'hello']
+    A --> End
+"#;
+        let result = run_flowchart(source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("Type error"), "Error: {}", err);
+        assert!(err.contains("expected int"), "Error: {}", err);
+    }
 }
 
 // =============================================================================
@@ -733,6 +948,41 @@ mod input_handling {
             .expect("Should execute successfully");
 
         assert_eq!(stdout, vec!["30"]);
+    }
+
+    // --- Tests added from TESTS.md section 7 ---
+
+    #[test]
+    fn test_input_shortage() {
+        let source = r#"flowchart TD
+    Start --> A[x = input; y = input]
+    A --> End
+"#;
+        let result = run_flowchart_with_input(source, vec!["hello"]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("I/O error"));
+    }
+
+    #[test]
+    fn test_input_direct_println() {
+        let source = r#"flowchart TD
+    Start --> A[println input]
+    A --> End
+"#;
+        let (stdout, _) =
+            run_flowchart_with_input(source, vec!["hello"]).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["hello"]);
+    }
+
+    #[test]
+    fn test_empty_string_input() {
+        let source = r#"flowchart TD
+    Start --> A[x = input; println x]
+    A --> End
+"#;
+        let (stdout, _) =
+            run_flowchart_with_input(source, vec![""]).expect("Should execute successfully");
+        assert_eq!(stdout, vec![""]);
     }
 }
 
@@ -1162,5 +1412,507 @@ mod exit_code {
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("invalid exit code"));
+    }
+}
+
+// =============================================================================
+// Cast operation tests (TESTS.md section 3)
+// =============================================================================
+
+mod cast_operations {
+    use super::*;
+
+    #[test]
+    fn test_cast_int_as_int() {
+        let source = r#"flowchart TD
+    Start --> A[x = 42 as int; println x]
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["42"]);
+    }
+
+    #[test]
+    fn test_cast_str_as_str() {
+        let source = r#"flowchart TD
+    Start --> A[x = 'hello' as str; println x]
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["hello"]);
+    }
+
+    #[test]
+    fn test_cast_bool_true_as_str() {
+        let source = r#"flowchart TD
+    Start --> A[x = true as str; println x]
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["true"]);
+    }
+
+    #[test]
+    fn test_cast_bool_false_as_str() {
+        let source = r#"flowchart TD
+    Start --> A[x = false as str; println x]
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["false"]);
+    }
+
+    #[test]
+    fn test_cast_bool_as_int() {
+        let source = r#"flowchart TD
+    Start --> A[x = true as int]
+    A --> End
+"#;
+        let result = run_flowchart(source);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Cannot cast"));
+    }
+
+    #[test]
+    fn test_cast_negative_string_to_int() {
+        let source = r#"flowchart TD
+    Start --> A[x = '-42' as int; println x]
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["-42"]);
+    }
+
+    #[test]
+    fn test_cast_empty_string_to_int() {
+        let source = r#"flowchart TD
+    Start --> A[x = '' as int]
+    A --> End
+"#;
+        let result = run_flowchart(source);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Cannot cast"));
+    }
+}
+
+// =============================================================================
+// Equality and comparison edge case tests (TESTS.md section 4)
+// =============================================================================
+
+mod equality_comparison {
+    use super::*;
+
+    #[test]
+    fn test_cross_type_eq_int_str() {
+        let source = r#"flowchart TD
+    Start --> A{1 == '1'?}
+    A -->|Yes| B[println 'equal']
+    A -->|No| C[println 'not equal']
+    B --> End
+    C --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["not equal"]);
+    }
+
+    #[test]
+    fn test_cross_type_ne_int_str() {
+        let source = r#"flowchart TD
+    Start --> A{1 != '1'?}
+    A -->|Yes| B[println 'not equal']
+    A -->|No| C[println 'equal']
+    B --> End
+    C --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["not equal"]);
+    }
+
+    #[test]
+    fn test_cross_type_eq_bool_int() {
+        let source = r#"flowchart TD
+    Start --> A{true == 1?}
+    A -->|Yes| B[println 'equal']
+    A -->|No| C[println 'not equal']
+    B --> End
+    C --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["not equal"]);
+    }
+
+    #[test]
+    fn test_str_eq_same() {
+        let source = r#"flowchart TD
+    Start --> A{'abc' == 'abc'?}
+    A -->|Yes| B[println 'equal']
+    A -->|No| C[println 'not equal']
+    B --> End
+    C --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["equal"]);
+    }
+
+    #[test]
+    fn test_bool_eq_same() {
+        let source = r#"flowchart TD
+    Start --> A{true == true?}
+    A -->|Yes| B[println 'equal']
+    A -->|No| C[println 'not equal']
+    B --> End
+    C --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["equal"]);
+    }
+
+    #[test]
+    fn test_negative_comparison() {
+        let source = r#"flowchart TD
+    Start --> A{-5 < 3?}
+    A -->|Yes| B[println 'true']
+    A -->|No| C[println 'false']
+    B --> End
+    C --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["true"]);
+    }
+}
+
+// =============================================================================
+// Integer edge case tests (TESTS.md section 5)
+// =============================================================================
+
+mod integer_edge_cases {
+    use super::*;
+
+    #[test]
+    fn test_int_overflow_addition() {
+        let source = r#"flowchart TD
+    Start --> A[x = 9223372036854775807 + 1; println x]
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["-9223372036854775808"]);
+    }
+
+    #[test]
+    fn test_int_overflow_multiplication() {
+        let source = r#"flowchart TD
+    Start --> A[x = 9223372036854775807 * 2; println x]
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["-2"]);
+    }
+
+    #[test]
+    fn test_int_overflow_subtraction() {
+        // i64::MIN = 0 - 9223372036854775807 - 1
+        // i64::MIN - 1 wraps to i64::MAX
+        let source = r#"flowchart TD
+    Start --> A[x = 0 - 9223372036854775807 - 1; y = x - 1; println y]
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["9223372036854775807"]);
+    }
+
+    #[test]
+    fn test_large_int_literal_output() {
+        let source = r#"flowchart TD
+    Start --> A[println 9223372036854775807]
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["9223372036854775807"]);
+    }
+}
+
+// =============================================================================
+// Variable scope tests (TESTS.md section 6)
+// =============================================================================
+
+mod variable_scope {
+    use super::*;
+
+    #[test]
+    fn test_variable_reassignment() {
+        let source = r#"flowchart TD
+    Start --> A[x = 1; x = 2; println x]
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["2"]);
+    }
+
+    #[test]
+    fn test_variable_type_change() {
+        let source = r#"flowchart TD
+    Start --> A[x = 42; x = 'hello'; println x]
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["hello"]);
+    }
+
+    #[test]
+    fn test_variable_after_branch() {
+        let source = r#"flowchart TD
+    Start --> Init[x = 0]
+    Init --> A{true?}
+    A -->|Yes| B[x = 42]
+    A -->|No| C[x = 99]
+    B --> D[println x]
+    C --> D
+    D --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["42"]);
+    }
+}
+
+// =============================================================================
+// Output edge case tests (TESTS.md section 8)
+// =============================================================================
+
+mod output_edge_cases {
+    use super::*;
+
+    #[test]
+    fn test_stdout_stderr_mixed() {
+        let source = r#"flowchart TD
+    Start --> A[println 'out'; error 'err']
+    A --> End
+"#;
+        let (stdout, stderr) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["out"]);
+        assert_eq!(stderr, vec!["err"]);
+    }
+
+    #[test]
+    fn test_error_with_variable() {
+        let source = r#"flowchart TD
+    Start --> A[x = 'my error'; error x]
+    A --> End
+"#;
+        let (stdout, stderr) = run_flowchart(source).expect("Should execute successfully");
+        assert!(stdout.is_empty());
+        assert_eq!(stderr, vec!["my error"]);
+    }
+
+    #[test]
+    fn test_println_empty_string() {
+        let source = r#"flowchart TD
+    Start --> A[println '']
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec![""]);
+    }
+
+    #[test]
+    fn test_println_bool() {
+        let source = r#"flowchart TD
+    Start --> A[println true]
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["true"]);
+    }
+
+    #[test]
+    fn test_println_int_literal() {
+        let source = r#"flowchart TD
+    Start --> A[println 42]
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["42"]);
+    }
+}
+
+// =============================================================================
+// Operator precedence E2E tests (TESTS.md section 9)
+// =============================================================================
+
+mod operator_precedence {
+    use super::*;
+
+    #[test]
+    fn test_precedence_mul_over_add() {
+        let source = r#"flowchart TD
+    Start --> A[println 1 + 2 * 3]
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["7"]);
+    }
+
+    #[test]
+    fn test_precedence_parentheses() {
+        let source = r#"flowchart TD
+    Start --> A[println (1 + 2) * 3]
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["9"]);
+    }
+
+    #[test]
+    fn test_left_associativity_subtraction() {
+        let source = r#"flowchart TD
+    Start --> A[println 10 - 3 - 2]
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["5"]);
+    }
+
+    #[test]
+    fn test_left_associativity_division() {
+        let source = r#"flowchart TD
+    Start --> A[println 12 / 3 / 2]
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["2"]);
+    }
+
+    #[test]
+    fn test_logical_operator_precedence() {
+        let source = r#"flowchart TD
+    Start --> A{false || true && true?}
+    A -->|Yes| B[println 'true']
+    A -->|No| C[println 'false']
+    B --> End
+    C --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["true"]);
+    }
+}
+
+// =============================================================================
+// Control flow edge case tests (TESTS.md section 10)
+// =============================================================================
+
+mod control_flow_edge_cases {
+    use super::*;
+
+    #[test]
+    fn test_minimal_flowchart() {
+        let source = r#"flowchart TD
+    Start --> End
+"#;
+        let (exit_code, stdout, stderr) = run_flowchart_with_exit_code(source).unwrap();
+        assert_eq!(exit_code, 0);
+        assert!(stdout.is_empty());
+        assert!(stderr.is_empty());
+    }
+
+    #[test]
+    fn test_diamond_pattern() {
+        let source = r#"flowchart TD
+    Start --> A{true?}
+    A -->|Yes| B[x = 1]
+    A -->|No| C[x = 2]
+    B --> D[println x]
+    C --> D
+    D --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["1"]);
+    }
+
+    #[test]
+    fn test_error_in_middle_of_statements() {
+        let source = r#"flowchart TD
+    Start --> A[x = 1; y = z; println x]
+    A --> End
+"#;
+        let result = run_flowchart(source);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Undefined"));
+    }
+}
+
+// =============================================================================
+// Parse edge case tests (TESTS.md section 11)
+// =============================================================================
+
+mod parse_edge_cases {
+    use super::*;
+    use merx::parser;
+    use merx::parser::AnalysisError;
+
+    #[test]
+    fn test_empty_flowchart() {
+        let source = "flowchart TD\n";
+        let result = parser::parse(source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, AnalysisError::Validation(_)));
+        assert!(err.to_string().contains("Missing 'Start' node"));
+    }
+
+    #[test]
+    fn test_underscore_identifier() {
+        let source = r#"flowchart TD
+    Start --> _foo[println 'hello']
+    _foo --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["hello"]);
+    }
+
+    #[test]
+    fn test_digits_in_identifier() {
+        let source = r#"flowchart TD
+    Start --> node123[println 'hello']
+    node123 --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["hello"]);
+    }
+
+    #[test]
+    fn test_unquoted_stadium_label() {
+        let source = r#"flowchart TD
+    Start([Begin]) --> A[println 'hello']
+    A --> End([Finish])
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["hello"]);
+    }
+
+    #[test]
+    fn test_long_arrow_no_label() {
+        let source = r#"flowchart TD
+    Start -----> A[println 'hello']
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["hello"]);
+    }
+
+    #[test]
+    fn test_empty_lines_between_nodes() {
+        let source = "flowchart TD\n\n    Start --> A[println 'hello']\n\n    A --> End\n";
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["hello"]);
+    }
+
+    #[test]
+    fn test_comment_only_lines() {
+        let source = r#"flowchart TD
+    Start --> A[println 'hello']
+    %% this is a comment
+    A --> End
+"#;
+        let (stdout, _) = run_flowchart(source).expect("Should execute successfully");
+        assert_eq!(stdout, vec!["hello"]);
     }
 }

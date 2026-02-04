@@ -1,0 +1,8 @@
+flowchart TD
+    Start --> A{true?}
+    A -->|Yes| B[println 'yes']
+    A -->|No| C[println 'no1']
+    A -->|No| D[println 'no2']
+    B --> End
+    C --> End
+    D --> End
