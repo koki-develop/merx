@@ -86,10 +86,12 @@ echo "Compiling Go programs..."
 go build -o "$BUILD_DIR/fizzbuzz_go" "$PROGRAMS_DIR/fizzbuzz/fizzbuzz.go"
 go build -o "$BUILD_DIR/fibonacci_go" "$PROGRAMS_DIR/fibonacci/fibonacci.go"
 go build -o "$BUILD_DIR/gcdsum_go" "$PROGRAMS_DIR/gcdsum/gcdsum.go"
+go build -o "$BUILD_DIR/primecount_go" "$PROGRAMS_DIR/primecount/primecount.go"
 echo "Compiling Rust programs..."
 rustc -O -o "$BUILD_DIR/fizzbuzz_rust" "$PROGRAMS_DIR/fizzbuzz/fizzbuzz.rs"
 rustc -O -o "$BUILD_DIR/fibonacci_rust" "$PROGRAMS_DIR/fibonacci/fibonacci.rs"
 rustc -O -o "$BUILD_DIR/gcdsum_rust" "$PROGRAMS_DIR/gcdsum/gcdsum.rs"
+rustc -O -o "$BUILD_DIR/primecount_rust" "$PROGRAMS_DIR/primecount/primecount.rs"
 
 cleanup() {
   rm -rf "$BUILD_DIR"
@@ -148,6 +150,11 @@ echo ""
 echo "=== Running GCD Sum benchmark (n=100) ==="
 mapfile -t gcdsum_args < <(build_hyperfine_args "gcdsum")
 hyperfine "${gcdsum_args[@]}"
+
+echo ""
+echo "=== Running Prime Count benchmark (n=10000) ==="
+mapfile -t primecount_args < <(build_hyperfine_args "primecount")
+hyperfine "${primecount_args[@]}"
 
 # --- Generate Markdown report ---
 echo ""
@@ -233,6 +240,13 @@ TEMP_OUTPUT="$(mktemp)"
   echo "Programs: [./programs/gcdsum/](./programs/gcdsum/)"
   echo ""
   generate_table "$RESULTS_DIR/gcdsum.json" "$VERSIONS_JSON"
+  echo ""
+
+  echo "## Prime Count (n=10000)"
+  echo ""
+  echo "Programs: [./programs/primecount/](./programs/primecount/)"
+  echo ""
+  generate_table "$RESULTS_DIR/primecount.json" "$VERSIONS_JSON"
   echo ""
 } >"$TEMP_OUTPUT"
 
