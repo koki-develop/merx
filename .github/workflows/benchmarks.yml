@@ -39,9 +39,9 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           gh release download --pattern 'merx-*-x86_64-unknown-linux-gnu.tar.gz' --output merx.tar.gz
-          tar xzf merx.tar.gz merx
+          tar xzf merx.tar.gz
           sudo mv merx /usr/local/bin/merx
-          rm merx.tar.gz
+          rm merx.tar.gz LICENSE README.md
           merx --version
 
       # ============================================================
