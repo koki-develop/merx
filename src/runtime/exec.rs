@@ -173,7 +173,7 @@ pub fn exec_statement<R: InputReader, W: OutputWriter>(
     match stmt {
         Statement::Assign { variable, value } => {
             let val = eval_expr(value, env, input_reader)?;
-            env.set(variable.clone(), val);
+            env.set(variable, val);
             Ok(())
         }
         Statement::Println { expr } => {

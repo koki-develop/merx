@@ -177,7 +177,7 @@ impl<R: BufRead> InputReader for StdinReader<R> {
 /// use merx::runtime::{Environment, Value, StdinReader, eval_expr};
 ///
 /// let mut env = Environment::new();
-/// env.set("x".to_string(), Value::Int(5));
+/// env.set("x", Value::Int(5));
 ///
 /// let mut input = StdinReader::new();
 /// let expr = Expr::Variable { name: "x".to_string() };
@@ -495,7 +495,7 @@ mod tests {
     #[test]
     fn test_eval_variable() {
         let mut env = Environment::new();
-        env.set("x".to_string(), Value::Int(10));
+        env.set("x", Value::Int(10));
         let mut input = MockInputReader::new(vec![]);
         let expr = Expr::Variable {
             name: "x".to_string(),
