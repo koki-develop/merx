@@ -67,6 +67,7 @@ check_required python3
 check_required node
 check_required ruby
 check_required go
+check_required rustc
 
 # --- Collect language versions ---
 declare -A LANG_VERSIONS=()
@@ -75,17 +76,21 @@ LANG_VERSIONS[python]="$(python3 --version)"
 LANG_VERSIONS[node]="Node.js $(node --version)"
 LANG_VERSIONS[ruby]="$(ruby --version | awk '{print $1, $2}')"
 LANG_VERSIONS[go]="$(go version | awk '{print $3}' | sed 's/^go/Go /')"
+LANG_VERSIONS[rust]="$(rustc --version | awk '{print "Rust", $2}')"
 
 MERX_BIN="$(command -v merx)"
 
-# --- Build Go programs ---
-GO_TMP_DIR=$(mktemp -d)
+# --- Build compiled programs ---
+BUILD_DIR=$(mktemp -d)
 echo "Compiling Go programs..."
-go build -o "$GO_TMP_DIR/fizzbuzz" "$PROGRAMS_DIR/fizzbuzz/fizzbuzz.go"
-go build -o "$GO_TMP_DIR/fibonacci" "$PROGRAMS_DIR/fibonacci/fibonacci.go"
+go build -o "$BUILD_DIR/fizzbuzz_go" "$PROGRAMS_DIR/fizzbuzz/fizzbuzz.go"
+go build -o "$BUILD_DIR/fibonacci_go" "$PROGRAMS_DIR/fibonacci/fibonacci.go"
+echo "Compiling Rust programs..."
+rustc -O -o "$BUILD_DIR/fizzbuzz_rust" "$PROGRAMS_DIR/fizzbuzz/fizzbuzz.rs"
+rustc -O -o "$BUILD_DIR/fibonacci_rust" "$PROGRAMS_DIR/fibonacci/fibonacci.rs"
 
 cleanup() {
-  rm -rf "$GO_TMP_DIR"
+  rm -rf "$BUILD_DIR"
 }
 trap cleanup EXIT
 
@@ -106,7 +111,8 @@ build_hyperfine_args() {
     "${PROGRAMS_DIR}/${benchmark}/${benchmark}.py"
     "${PROGRAMS_DIR}/${benchmark}/${benchmark}.js"
     "${PROGRAMS_DIR}/${benchmark}/${benchmark}.rb"
-    "${GO_TMP_DIR}/${benchmark}"
+    "${BUILD_DIR}/${benchmark}_go"
+    "${BUILD_DIR}/${benchmark}_rust"
   )
   for f in "${required_files[@]}"; do
     if [[ ! -f "$f" ]]; then
@@ -119,7 +125,8 @@ build_hyperfine_args() {
   args+=(-n "python" "python3 ${PROGRAMS_DIR}/${benchmark}/${benchmark}.py > /dev/null")
   args+=(-n "node" "node ${PROGRAMS_DIR}/${benchmark}/${benchmark}.js > /dev/null")
   args+=(-n "ruby" "ruby ${PROGRAMS_DIR}/${benchmark}/${benchmark}.rb > /dev/null")
-  args+=(-n "go" "${GO_TMP_DIR}/${benchmark} > /dev/null")
+  args+=(-n "go" "${BUILD_DIR}/${benchmark}_go > /dev/null")
+  args+=(-n "rust" "${BUILD_DIR}/${benchmark}_rust > /dev/null")
 
   printf '%s\n' "${args[@]}"
 }
@@ -161,7 +168,8 @@ build_versions_json() {
     --arg node "${LANG_VERSIONS[node]}" \
     --arg ruby "${LANG_VERSIONS[ruby]}" \
     --arg go "${LANG_VERSIONS[go]}" \
-    '{merx: $merx, python: $python, node: $node, ruby: $ruby, go: $go}'
+    --arg rust "${LANG_VERSIONS[rust]}" \
+    '{merx: $merx, python: $python, node: $node, ruby: $ruby, go: $go, rust: $rust}'
 }
 
 # Generate table from hyperfine JSON with version as language name
