@@ -78,7 +78,7 @@ LANG_VERSIONS[node]="Node.js $(node --version)"
 LANG_VERSIONS[ruby]="Ruby $(ruby --version | awk '{print $2}')"
 LANG_VERSIONS[go]="$(go version | awk '{print $3}' | sed 's/^go/Go /')"
 LANG_VERSIONS[rust]="$(rustc --version | awk '{print "Rust", $2}')"
-LANG_VERSIONS[c]="C $(clang --version | head -1 | awk '{print $3}')"
+LANG_VERSIONS[c]="C $(clang --version | head -1 | awk '{print $4}')"
 
 MERX_BIN="$(command -v merx)"
 
