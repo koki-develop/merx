@@ -28,10 +28,16 @@ Hello, merx!
 
 ## Installation
 
-### Homebrew
+### Homebrew (Recommended)
 
 ```sh
 brew install koki-develop/tap/merx
+```
+
+### Cargo
+
+```sh
+cargo install --git https://github.com/koki-develop/merx
 ```
 
 ### GitHub Releases
